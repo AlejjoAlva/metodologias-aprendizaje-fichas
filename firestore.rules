@@ -5,7 +5,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function autenticado() { return request.auth != null; }
-    function anfitrion() { return autenticado() && request.auth.uid == 'UID_ANFITRION'; }
+    function anfitrion() { return autenticado() && request.auth.uid == 'anfitrion-fichas-2026'; }
     function estado() { return get(/databases/$(database)/documents/juego/estado).data; }
 
     match /juego/estado {
