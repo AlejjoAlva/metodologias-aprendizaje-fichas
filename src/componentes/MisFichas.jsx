@@ -21,7 +21,18 @@ export default function MisFichas({ fichas, estado }) {
               <span className="etiqueta">{ESTADO_TXT[f.estado] ?? ''}</span>
             </summary>
             <p className="mi-ficha-cat">{f.categoria}</p>
-            <p className="mi-ficha-desc">{f.descripcion}</p>
+            <p className="mi-ficha-desc">{f.que_es ?? f.descripcion}</p>
+            {f.ejemplo && (
+              <p className="mi-ficha-desc">
+                <strong>Ejemplo:</strong> {f.ejemplo}
+              </p>
+            )}
+            {f.como_se_aplica && (
+              <details className="plegable">
+                <summary>Cómo se aplica</summary>
+                <p className="mi-ficha-desc pre">{f.como_se_aplica}</p>
+              </details>
+            )}
           </details>
         ))}
     </section>

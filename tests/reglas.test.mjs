@@ -143,3 +143,10 @@ test('"Tú eliges": solo el orador, en la ruleta de postura', async () => {
   await assertSucceeds(setDoc(doc(celular('orador'), 'postura/0_1'), { eleccion: 'ataca' }))
   await assertFails(setDoc(doc(celular('orador'), 'postura/0_1'), { eleccion: 'defiende' }))
 })
+
+test('la evidencia de las fichas no la lee ningún celular; el anfitrión sí', async () => {
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'evidencia/1'), { nivel: 'Respaldada' }))
+  await assertFails(getDoc(doc(celular('ana'), 'evidencia/1')))
+  await assertFails(setDoc(doc(celular('ana'), 'evidencia/1'), { nivel: 'Debatida' }))
+  await assertSucceeds(getDoc(doc(pantalla(), 'evidencia/1')))
+})

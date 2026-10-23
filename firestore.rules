@@ -18,6 +18,12 @@ service cloud.firestore {
       allow write: if anfitrion();
     }
 
+    // Nivel, texto de evidencia, mito y origen: nunca llegan a los celulares. La pantalla los
+    // publica en el turno al abrir el Resultado.
+    match /evidencia/{n} {
+      allow read, write: if anfitrion();
+    }
+
     match /turnos/{id} {
       allow read: if autenticado();
       allow write: if anfitrion();

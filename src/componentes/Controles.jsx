@@ -7,11 +7,10 @@ import {
   iniciarPartida,
   marcarAusente,
   renombrar,
-  reemplazarFichas,
   saltarTurno,
   terminarPartida,
 } from '../lib/acciones-pantalla'
-import { leerFichas } from '../lib/csv'
+import CajonFichas from './CajonFichas'
 import { FASES } from '../lib/juego'
 
 const CON_CRONO = [FASES.IMPRESION, FASES.ARGUMENTO, FASES.VOTO]
@@ -31,7 +30,6 @@ export default function Controles({
   personas,
   conectados,
   fichas,
-  fichasBase,
   onSiguiente,
   onSaltar,
   fallo,
@@ -50,7 +48,7 @@ export default function Controles({
       await fn()
     } catch (e) {
       console.error(e)
-      setFallo('No se pudo completar. Revisa la conexión e intenta otra vez.')
+      setFallo(e?.message?.startsWith('Hay fichas') ? e.message : 'No se pudo completar. Revisa la conexión e intenta otra vez.')
     } finally {
       setOcupado(false)
     }
@@ -137,35 +135,14 @@ export default function Controles({
               className="ctl peligro"
               onClick={hacer(async () => {
                 const ok = prompt('Esto saca a todos y vuelve a repartir desde cero. Escribe EMPEZAR DE CERO para confirmar.')
-                if (ok?.trim().toUpperCase() === 'EMPEZAR DE CERO') await empezarDeCero(db, estado, fichasBase)
+                if (ok?.trim().toUpperCase() === 'EMPEZAR DE CERO') await empezarDeCero(db, estado, fichas)
               })}
             >
               Empezar de cero
             </button>
           </div>
 
-          {!estado.iniciada && (
-            <>
-              <h3>Fichas</h3>
-              <p className="ayuda">
-                {fichas.length} cargadas. Puedes reemplazarlas con un CSV de tres columnas: nombre, descripción, categoría.
-              </p>
-              <input
-                type="file"
-                accept=".csv,text/csv"
-                onChange={(e) => {
-                  const archivo = e.target.files?.[0]
-                  if (!archivo) return
-                  archivo.text().then((t) => {
-                    const nuevas = leerFichas(t)
-                    if (!nuevas.length) return setFallo('El CSV no tiene fichas válidas.')
-                    if (confirm(`¿Reemplazar las fichas por ${nuevas.length} del archivo?`))
-                      hacer(() => reemplazarFichas(db, estado, nuevas, fichas))()
-                  })
-                }}
-              />
-            </>
-          )}
+          <CajonFichas estado={estado} fichas={fichas} hacer={hacer} setFallo={setFallo} />
 
           <h3>
             Personas ({conectados.size} conectadas / {personas.length})

@@ -18,6 +18,7 @@ import {
   girarFicha,
   girarPersona,
   girarPostura,
+  migrarFichasViejas,
   pasarA,
   prepararSala,
   resolverEleccion,
@@ -78,10 +79,11 @@ function Login({ onListo }) {
 
 function Tablero() {
   const { estado, error } = useEstado()
-  const fichasBase = useMemo(() => leerFichas(fichasCsv), [])
+  const fichasBase = useMemo(() => leerFichas(fichasCsv).fichas, [])
   const fichas = useFichas(true)
     .filter((f) => f.estado !== 'retirada')
     .sort((a, b) => a.n - b.n)
+  const fichasVisibles = fichas.filter((f) => f.estado !== 'excluida')
   const personas = usePersonas(estado?.generacion)
   const presencia = usePresencia(true)
   const reclamos = useReclamos(true)
@@ -114,6 +116,12 @@ function Tablero() {
   useEffect(() => {
     if (estado === null) prepararSala(db, fichasBase).catch((e) => setFallo(String(e.message || e)))
   }, [estado, fichasBase])
+
+  // Fichas del formato viejo (sin que_es): se convierten una sola vez.
+  useEffect(() => {
+    if (fichas.some((f) => f.que_es === undefined)) unaVez('migrar', () => migrarFichasViejas(db, fichas))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fichas.length])
 
   // Ruletas: cada una gira, se ve unos segundos y pasa sola a la siguiente.
   useEffect(() => {
@@ -207,12 +215,12 @@ function Tablero() {
         <img src="/uace-logo.png" alt="UACE" className="pt-logo" />
       </header>
 
-      <ListaFichas fichas={fichas} estado={estado} nombre={nombre} />
+      <ListaFichas fichas={fichasVisibles} estado={estado} nombre={nombre} />
 
       <section className="pt-centro">
         <CentroPantalla
           estado={estado}
-          fichas={fichas}
+          fichas={fichasVisibles}
           restante={restante}
           respuestas={respuestas}
           sentimientos={sentimientos}
@@ -273,7 +281,6 @@ function Tablero() {
         personas={personas}
         conectados={conectados}
         fichas={fichas}
-        fichasBase={fichasBase}
         onSiguiente={siguiente}
         onSaltar={() => {
           if (estado.oradorId) saltados.current = [estado.oradorId]

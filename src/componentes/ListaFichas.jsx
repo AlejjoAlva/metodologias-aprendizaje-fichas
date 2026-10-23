@@ -25,7 +25,7 @@ export default function ListaFichas({ fichas, estado, nombre }) {
             key={f.n}
             ref={f.estado === 'en_juego' ? enJuego : null}
             className={`lf ${f.estado}`}
-            title={f.descripcion}
+            title={f.que_es}
           >
             <span className="lf-nombre">{f.nombre}</span>
             <span className="lf-cat">{f.categoria}</span>

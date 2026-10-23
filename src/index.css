@@ -1418,3 +1418,101 @@ button {
 .punto.off {
   background: var(--linea);
 }
+
+/* Cajón: fichas, importación y ajustes */
+.cajon-import,
+.resumen-import {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8vh;
+}
+
+.resumen-import {
+  background: var(--papel);
+  border: 1px solid var(--linea);
+  border-radius: 10px;
+  padding: 1vh 0.8vw;
+}
+
+.resumen-import ul {
+  margin: 0.4vh 0 0;
+  padding-left: 1.2em;
+}
+
+.cajon-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5vw;
+}
+
+.cajon-filtros select {
+  font: inherit;
+  padding: 0.4vh 0.4vw;
+}
+
+.cajon-fichas {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.cajon-fichas li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.2vh 0.5vw;
+  padding: 0.6vh 0;
+  border-bottom: 1px solid var(--papel-2);
+}
+
+.cajon-fichas li.excluida .cf-nombre {
+  color: var(--tinta-2);
+  text-decoration: line-through;
+}
+
+.cf-cat,
+.cf-estado {
+  color: var(--tinta-2);
+  font-size: 1.5vh;
+}
+
+.cf-nivel {
+  font-weight: 600;
+  color: var(--acento);
+}
+
+.etiqueta.mala {
+  background: var(--no-suave);
+  color: var(--no);
+}
+
+.cajon-ajustes {
+  display: grid;
+  grid-template-columns: 1fr 5em;
+  gap: 0.5vh 0.5vw;
+  align-items: center;
+}
+
+.cajon-ajustes input {
+  font: inherit;
+  width: 100%;
+  padding: 0.3vh 0.3vw;
+}
+
+.cajon-ajustes h4 {
+  grid-column: 1 / -1;
+  margin: 1vh 0 0;
+  font-size: 1.7vh;
+  color: var(--tinta-2);
+}
+
+.plegable summary {
+  cursor: pointer;
+  color: var(--acento);
+  font-weight: 600;
+}
+
+.pre {
+  white-space: pre-line;
+}

@@ -65,24 +65,67 @@ export async function prepararSala(db, fichas) {
   const estado = estadoInicial()
   const batch = writeBatch(db)
   batch.set(ref, estado)
-  for (const f of fichas) batch.set(doc(db, 'fichas', String(f.n)), fichaLibre(f, 0))
+  for (const f of fichas) escribirFicha(batch, db, f, 0)
   await batch.commit()
   return estado
 }
 
+// La ficha pública (la leen los celulares) y su evidencia aparte (solo el anfitrión).
 const fichaLibre = (f, generacion) => ({
   n: f.n,
   nombre: f.nombre,
-  descripcion: f.descripcion,
   categoria: f.categoria,
+  que_es: f.que_es,
+  ejemplo: f.ejemplo,
+  como_se_aplica: f.como_se_aplica,
+  aviso: f.avisos?.length ? f.avisos.join(', ') : null,
+  invalida: !!f.invalida,
   dueno: null,
   estado: 'libre',
   generacion,
 })
 
+function escribirFicha(batch, db, f, generacion) {
+  batch.set(doc(db, 'fichas', String(f.n)), fichaLibre(f, generacion))
+  batch.set(doc(db, 'evidencia', String(f.n)), f.evidencia)
+}
+
+/** Niveles de evidencia por número de ficha. Solo el anfitrión puede leerlos; no se muestran. */
+export async function leerNiveles(db) {
+  const snap = await getDocs(collection(db, 'evidencia'))
+  return Object.fromEntries(snap.docs.map((d) => [Number(d.id), d.data().nivel]))
+}
+
+/**
+ * Migración de fichas del formato viejo (nombre, categoría, descripción): la descripción pasa a
+ * que_es y la evidencia queda "Debatida" provisional, hasta importar el CSV nuevo.
+ */
+export async function migrarFichasViejas(db, fichas) {
+  const viejas = fichas.filter((f) => f.que_es === undefined)
+  if (!viejas.length) return 0
+  const batch = writeBatch(db)
+  for (const f of viejas) {
+    batch.update(doc(db, 'fichas', String(f.n)), {
+      que_es: f.descripcion ?? '',
+      ejemplo: '',
+      como_se_aplica: '',
+      aviso: 'formato viejo: nivel provisional',
+      invalida: false,
+    })
+    batch.set(doc(db, 'evidencia', String(f.n)), { nivel: 'Debatida', texto: '', mito: '', origen: '' })
+  }
+  await batch.commit()
+  return viejas.length
+}
+
 /** Reparte 2 fichas a cada persona conectada y arranca la partida. */
 export async function iniciarPartida(db, estado, { fichas, personas, conectados, rnd = Math.random }) {
   const presentes = personas.filter((p) => !p.ausente && conectados.has(p.id)).map((p) => p.id)
+  const invalidas = fichas.filter((f) => f.estado === 'libre' && f.invalida)
+  if (invalidas.length)
+    throw new Error(
+      `Hay fichas sin nivel de evidencia válido: ${invalidas.map((f) => f.nombre).join(', ')}. Corrígelas o exclúyelas.`,
+    )
   const libres = fichas.filter((f) => f.estado === 'libre').map((f) => f.n)
   const reparto = repartir(libres, presentes, rnd)
   const batch = writeBatch(db)
@@ -148,7 +191,13 @@ export async function girarFicha(db, estado, fichas, rnd = Math.random) {
   batch.update(doc(db, ESTADO), {
     fase: FASES.RULETA_FICHA,
     fichaId: n,
-    ficha: { nombre: f.nombre, categoria: f.categoria, descripcion: f.descripcion },
+    ficha: {
+      nombre: f.nombre,
+      categoria: f.categoria,
+      que_es: f.que_es ?? f.descripcion ?? '',
+      ejemplo: f.ejemplo ?? '',
+      como_se_aplica: f.como_se_aplica ?? '',
+    },
     eventos: evento(estado, `🃏 ${estado.oradorNombre} juega «${f.nombre}»`),
   })
   await batch.commit()
@@ -380,17 +429,27 @@ export async function resolverReclamo(db, reclamo, personas) {
 export async function empezarDeCero(db, estado, fichas) {
   const batch = writeBatch(db)
   const generacion = (estado.generacion || 0) + 1
-  batch.set(doc(db, ESTADO), estadoInicial(generacion, estado.codigoSala))
-  for (const f of fichas) batch.set(doc(db, 'fichas', String(f.n)), fichaLibre(f, generacion))
+  batch.set(doc(db, ESTADO), { ...estadoInicial(generacion, estado.codigoSala), ajustes: estado.ajustes ?? null })
+  // Las fichas cargadas (también las importadas) vuelven a estar libres; las excluidas siguen fuera.
+  for (const f of fichas)
+    batch.update(doc(db, 'fichas', String(f.n)), {
+      dueno: null,
+      estado: f.estado === 'excluida' ? 'excluida' : 'libre',
+      generacion,
+    })
   await batch.commit()
 }
 
-/** Reemplaza la tabla de fichas (solo antes de iniciar). */
+/** Reemplaza la tabla de fichas completa (solo antes de iniciar). */
 export async function reemplazarFichas(db, estado, nuevas, viejas) {
   const batch = writeBatch(db)
   const nuevasN = new Set(nuevas.map((f) => f.n))
-  for (const f of nuevas) batch.set(doc(db, 'fichas', String(f.n)), fichaLibre(f, estado.generacion))
+  for (const f of nuevas) escribirFicha(batch, db, f, estado.generacion)
   for (const f of viejas) if (!nuevasN.has(f.n)) batch.update(doc(db, 'fichas', String(f.n)), { estado: 'retirada' })
   await batch.commit()
 }
 
+/** Saca una ficha de la partida (o la devuelve). Solo fichas sin repartir. */
+export async function excluirFicha(db, ficha, excluir) {
+  await updateDoc(doc(db, 'fichas', String(ficha.n)), { estado: excluir ? 'excluida' : 'libre' })
+}
