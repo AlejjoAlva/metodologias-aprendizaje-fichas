@@ -11,6 +11,7 @@ import {
 } from '../lib/config'
 import { elegirReto, enviarSentimiento, responder, yaRespondi } from '../lib/acciones-celular'
 import Crono from './Crono'
+import { separarFuentes, traeEtiqueta } from '../lib/texto'
 
 const RETO_TXT = { aplicala: 'Aplícala', defiende: 'Defiende', ataca: 'Ataca', elige: 'Tú eliges' }
 
@@ -105,7 +106,8 @@ function FichaEnJuego({ estado, soyOrador }) {
               <p className="ficha-juego-desc">{f.que_es ?? f.descripcion}</p>
               {f.ejemplo && (
                 <p className="ficha-juego-desc">
-                  <strong>Ejemplo:</strong> {f.ejemplo}
+                  {!traeEtiqueta(f.ejemplo, 'Ejemplo') && <strong>Ejemplo: </strong>}
+                {f.ejemplo}
                 </p>
               )}
               {f.como_se_aplica && (
@@ -374,18 +376,37 @@ function MiResultado({ persona, estado }) {
         </p>
         {rev.texto && (
           <p>
-            <strong>Evidencia:</strong> {rev.texto}
+            <strong>Evidencia:</strong> {separarFuentes(rev.texto).texto}
           </p>
         )}
         {rev.mito && (
           <p>
-            <strong>Mito y límites:</strong> {rev.mito}
+            {!traeEtiqueta(rev.mito, 'Mito', 'Límite') && <strong>Mito y límites: </strong>}
+            {rev.mito}
           </p>
         )}
         {rev.origen && (
           <p className="ayuda">
             <strong>Origen:</strong> {rev.origen}
           </p>
+        )}
+        {separarFuentes(rev.texto).fuentes.length > 0 && (
+          <details className="plegable fuentes">
+            <summary>Fuentes</summary>
+            <ul>
+              {separarFuentes(rev.texto).fuentes.map((u) => (
+                <li key={u}>
+                  {/^https?:/.test(u) ? (
+                    <a href={u} target="_blank" rel="noreferrer">
+                      {u}
+                    </a>
+                  ) : (
+                    u
+                  )}
+                </li>
+              ))}
+            </ul>
+          </details>
         )}
       </section>
       <section className="tarjeta">

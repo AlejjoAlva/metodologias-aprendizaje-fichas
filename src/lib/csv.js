@@ -67,11 +67,12 @@ export function leerFichas(texto) {
       texto: cab.indexOf('evidencia_texto'),
       mito: cab.indexOf('mito_limites'),
       origen: cab.indexOf('origen'),
+      jugable: cab.indexOf('jugable'),
     }
   } else {
     // Sin encabezado: el formato viejo de tres columnas.
     viejo = true
-    idx = { nombre: 0, que_es: 1, categoria: 2, ejemplo: -1, como_se_aplica: -1, nivel: -1, texto: -1, mito: -1, origen: -1 }
+    idx = { nombre: 0, que_es: 1, categoria: 2, ejemplo: -1, como_se_aplica: -1, nivel: -1, texto: -1, mito: -1, origen: -1, jugable: -1 }
   }
   const de = (f, k) => (idx[k] >= 0 ? limpio(f[idx[k]]) : '')
 
@@ -91,6 +92,11 @@ export function leerFichas(texto) {
       avisos: [],
       invalida: !NIVELES.includes(nivel),
     }
+    // Columna de control opcional: lo que no es "Sí" (No, Reservada, Dividir…) entra excluido;
+    // una ficha inválida también. Desde el cajón se pueden volver a incluir.
+    const jugable = sinTilde(de(f, 'jugable'))
+    ficha.excluida = ficha.invalida || !['', 'si', 'yes'].includes(jugable)
+    if (!['', 'si', 'yes'].includes(jugable)) ficha.avisos.push(`jugable: ${de(f, 'jugable')}`)
     if (!ficha.que_es) ficha.avisos.push('sin «qué es»')
     if (!ficha.ejemplo) ficha.avisos.push('sin ejemplo')
     if (viejo) ficha.avisos.push('formato viejo: nivel provisional')
@@ -112,5 +118,7 @@ export function resumir(fichas) {
     porNivel: contar((f) => (f.invalida ? null : f.evidencia.nivel)),
     conAviso: fichas.filter((f) => f.avisos.length).map((f) => ({ n: f.n, nombre: f.nombre, avisos: f.avisos })),
     invalidas: fichas.filter((f) => f.invalida).map((f) => ({ n: f.n, nombre: f.nombre, nivel: f.evidencia.nivel })),
+    excluidas: fichas.filter((f) => f.excluida).length,
+    jugables: fichas.filter((f) => !f.excluida).length,
   }
 }

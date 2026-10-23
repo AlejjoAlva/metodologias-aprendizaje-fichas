@@ -90,9 +90,11 @@ function Tablero() {
   const reclamos = useReclamos(true)
   const fase = estado?.fase
   const conRespuesta = fase === FASES.IMPRESION || fase === FASES.VOTO
-  const respuestas = useRespuestasFase(estado, !!estado && conRespuesta)
+  const todasRespuestas = useRespuestasFase(estado, !!estado && conRespuesta)
   const sentimientos = useSentimientos(estado, fase === FASES.ARGUMENTO)
   const restante = useRestante(estado)
+  const idsVigentes = new Set(personas.map((p) => p.id))
+  const respuestas = todasRespuestas.filter((r) => idsVigentes.has(r.personaId))
   const [fallo, setFallo] = useState(null)
   const hecho = useRef(new Set())
   // Niveles de evidencia solo para repartir sin repetir nivel. Se leen al repartir y no se muestran.

@@ -4,6 +4,7 @@ import { NIVELES_EVIDENCIA, REACCIONES } from '../lib/config'
 import Crono from './Crono'
 import Ruleta from './Ruleta'
 import Podio from './Podio'
+import { separarFuentes, traeEtiqueta } from '../lib/texto'
 
 const RETO_TXT = { aplicala: 'Aplícala', defiende: 'Defiende', ataca: 'Ataca', elige: 'Tú eliges' }
 const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0)
@@ -147,7 +148,8 @@ function TarjetaFicha({ estado, restante }) {
             <p className="tf-desc">{estado.ficha?.que_es ?? estado.ficha?.descripcion}</p>
             {estado.ficha?.ejemplo && (
               <p className="tf-ejemplo">
-                <strong>Ejemplo:</strong> {estado.ficha.ejemplo}
+                {!traeEtiqueta(estado.ficha.ejemplo, 'Ejemplo') && <strong>Ejemplo: </strong>}
+                {estado.ficha.ejemplo}
               </p>
             )}
           </>
@@ -282,12 +284,13 @@ function Resultado({ estado }) {
         <div className="rev-textos">
           {rev.texto && (
             <p>
-              <strong>Qué dice la evidencia.</strong> {rev.texto}
+              <strong>Qué dice la evidencia.</strong> {separarFuentes(rev.texto).texto}
             </p>
           )}
           {rev.mito && (
             <p>
-              <strong>Mito y límites.</strong> {rev.mito}
+              {!traeEtiqueta(rev.mito, 'Mito', 'Límite') && <strong>Mito y límites. </strong>}
+              {rev.mito}
             </p>
           )}
           {rev.origen && (

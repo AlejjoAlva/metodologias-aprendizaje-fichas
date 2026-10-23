@@ -108,7 +108,7 @@ const fichaLibre = (f, generacion) => ({
   aviso: f.avisos?.length ? f.avisos.join(', ') : null,
   invalida: !!f.invalida,
   dueno: null,
-  estado: 'libre',
+  estado: f.excluida ? 'excluida' : 'libre',
   generacion,
 })
 
@@ -346,6 +346,9 @@ export async function cerrarTurno(db, estado, { personas, conectados }) {
     estado.fichaId != null ? getDoc(doc(db, 'evidencia', String(estado.fichaId))) : null,
   ])
   const evidencia = evidenciaSnap?.exists() ? evidenciaSnap.data() : {}
+  // Solo cuentan las personas inscritas en esta partida.
+  const vigentes = new Set(personas.map((p) => p.id))
+  for (const mapa of [impresiones, votos]) for (const id of Object.keys(mapa)) if (!vigentes.has(id)) delete mapa[id]
   const reto = estado.reto || 'defiende'
   const calculo = calcularTurno({
     reto,

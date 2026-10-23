@@ -153,3 +153,15 @@ test('la evidencia de las fichas no la lee ningún celular; el anfitrión sí', 
   await assertFails(setDoc(doc(celular('ana'), 'evidencia/1'), { nivel: 'Debatida' }))
   await assertSucceeds(getDoc(doc(pantalla(), 'evidencia/1')))
 })
+
+test('una persona de una partida anterior no puede responder', async () => {
+  await env.withSecurityRulesDisabled((ctx) =>
+    setDoc(doc(ctx.firestore(), 'personas/vieja'), { nombre: 'Vieja', uids: ['vieja'], codigoSala: 'ABCD', generacion: 0, paso: false, ausente: false }),
+  )
+  await preparar({ generacion: 1 })
+  await env.withSecurityRulesDisabled((ctx) =>
+    setDoc(doc(ctx.firestore(), 'personas/vieja'), { nombre: 'Vieja', uids: ['vieja'], codigoSala: 'ABCD', generacion: 0, paso: false, ausente: false }),
+  )
+  const r = resp({ uid: 'vieja', personaId: 'vieja', generacion: 1 })
+  await assertFails(setDoc(doc(celular('vieja'), 'respuestas', idResp(r)), r))
+})

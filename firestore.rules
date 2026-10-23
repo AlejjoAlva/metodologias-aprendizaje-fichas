@@ -74,6 +74,7 @@ service cloud.firestore {
         && id == string(request.resource.data.generacion) + '_' + string(request.resource.data.turno)
                  + '_' + request.resource.data.fase + '_' + request.resource.data.personaId
         && request.auth.uid in get(/databases/$(database)/documents/personas/$(request.resource.data.personaId)).data.uids
+        && get(/databases/$(database)/documents/personas/$(request.resource.data.personaId)).data.generacion == estado().generacion
         // El orador también da su primera impresión (y predicción), pero no vota su turno.
         && (request.resource.data.personaId != estado().oradorId || request.resource.data.fase == 'impresion')
         && request.resource.data.fase == estado().fase

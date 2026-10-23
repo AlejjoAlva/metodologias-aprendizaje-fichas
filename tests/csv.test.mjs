@@ -16,7 +16,7 @@ test('CSV de ejemplo: campos multilínea, comillas dobles y columnas desconocida
   assert.match(b.evidencia.mito, /"ilusión de dominio"/)
   // Las columnas incluir/revisar no se cuelan en la ficha.
   assert.equal('incluir' in a || 'revisar' in a, false)
-  assert.deepEqual(Object.keys(a).sort(), ['avisos', 'categoria', 'como_se_aplica', 'ejemplo', 'evidencia', 'invalida', 'n', 'nombre', 'que_es'])
+  assert.deepEqual(Object.keys(a).sort(), ['avisos', 'categoria', 'como_se_aplica', 'ejemplo', 'evidencia', 'excluida', 'invalida', 'n', 'nombre', 'que_es'])
   assert.equal(resumen.total, 6)
   assert.equal(resumen.porCategoria['Técnicas de estudio'], 2)
   assert.deepEqual(resumen.porNivel, { Respaldada: 2, 'Poco respaldada': 2, Debatida: 1, '(vacío)': 1 })
@@ -51,4 +51,23 @@ test('formato viejo (nombre, descripción, categoría): migra a que_es con nivel
   assert.equal(fichas[0].evidencia.nivel, 'Debatida')
   assert.equal(fichas[0].invalida, false)
   assert.equal(leerFichas('X;desc;cat\r\nY;d2;c2').fichas[1].nombre, 'Y')
+})
+
+test('columna jugable: lo que no es "Sí" entra excluido; una inválida también', () => {
+  const cab = 'nombre,categoria,que_es,ejemplo,evidencia_nivel,jugable\n'
+  const { fichas, resumen } = leerFichas(cab + 'A,C,q,e,Debatida,Sí\nB,C,q,e,Debatida,No\nC,C,q,e,Debatida,Reservada\nD,C,q,e,Sin asignar,Sí\n')
+  assert.deepEqual(fichas.map((f) => f.excluida), [false, true, true, true])
+  assert.equal(resumen.jugables, 1)
+  assert.equal(resumen.excluidas, 3)
+  assert.equal(leerFichas(ejemplo).fichas[5].excluida, true)
+})
+
+test('presentación: etiquetas repetidas y fuentes separadas', async () => {
+  const { traeEtiqueta, separarFuentes } = await import('../src/lib/texto.js')
+  assert.equal(traeEtiqueta('Ejemplo ilustrativo: algo', 'Ejemplo'), true)
+  assert.equal(traeEtiqueta('Algo', 'Ejemplo'), false)
+  const s = separarFuentes('Hay estudios. Fuentes: https://a.org/1 ; https://b.org/2')
+  assert.equal(s.texto, 'Hay estudios.')
+  assert.deepEqual(s.fuentes, ['https://a.org/1', 'https://b.org/2'])
+  assert.deepEqual(separarFuentes('Sin fuentes').fuentes, [])
 })

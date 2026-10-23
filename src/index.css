@@ -1863,3 +1863,49 @@ button {
 .premio-detalle {
   font-size: 1.5vh;
 }
+
+.fuentes ul {
+  margin: 4px 0 0;
+  padding-left: 1.1em;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+/* Fichas reales: nombres, categorías y «qué es» largos */
+.tf-nombre {
+  font-size: 4.8vh;
+}
+
+.tf-cat {
+  font-size: 1.8vh;
+}
+
+.tf-desc {
+  font-size: 2.4vh;
+  line-height: 1.35;
+  margin-top: 1vh;
+}
+
+.tf-ejemplo {
+  font-size: 2.1vh;
+  margin-top: 0.8vh;
+}
+
+.guion {
+  font-size: 2vh;
+  padding: 1.1vh 1vw;
+}
+
+.medidores {
+  gap: 1.4vh;
+}
+
+.centro-turno {
+  overflow: hidden;
+}
+
+.resultado .rev-textos {
+  font-size: 1.9vh;
+  line-height: 1.35;
+  max-height: 34vh;
+}

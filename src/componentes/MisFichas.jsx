@@ -1,3 +1,5 @@
+import { traeEtiqueta } from '../lib/texto'
+
 const ESTADO_TXT = { repartida: 'En tu mano', en_juego: 'En juego ahora', jugada: 'Ya se jugó' }
 
 export default function MisFichas({ fichas, estado }) {
@@ -24,7 +26,8 @@ export default function MisFichas({ fichas, estado }) {
             <p className="mi-ficha-desc">{f.que_es ?? f.descripcion}</p>
             {f.ejemplo && (
               <p className="mi-ficha-desc">
-                <strong>Ejemplo:</strong> {f.ejemplo}
+                {!traeEtiqueta(f.ejemplo, 'Ejemplo') && <strong>Ejemplo: </strong>}
+                {f.ejemplo}
               </p>
             )}
             {f.como_se_aplica && (

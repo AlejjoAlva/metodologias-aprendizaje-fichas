@@ -61,7 +61,9 @@ export default function CajonFichas({ estado, fichas, hacer, setFallo }) {
           {importe && (
             <div className="resumen-import">
               <p>
-                <strong>{importe.resumen.total}</strong> fichas en el archivo
+                <strong>{importe.resumen.total}</strong> fichas en el archivo · <strong>{importe.resumen.jugables}</strong>{' '}
+                para jugar · {importe.resumen.excluidas} entran excluidas (no jugables o inválidas; puedes incluirlas
+                después)
               </p>
               <p className="ayuda">Por categoría: {lista(importe.resumen.porCategoria)}</p>
               <p className="ayuda">Por nivel: {lista(importe.resumen.porNivel)}</p>
