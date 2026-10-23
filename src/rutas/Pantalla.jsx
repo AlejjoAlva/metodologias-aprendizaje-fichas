@@ -202,7 +202,8 @@ function Tablero() {
   }
 
   const presentes = personas.filter((p) => !p.ausente && conectados.has(p.id))
-  const noVotan = estado.oradorId ? 1 : 0
+  // El orador responde la primera impresión, pero no el voto final.
+  const noVotan = estado.oradorId && fase !== FASES.IMPRESION ? 1 : 0
 
   return (
     <main className="pantalla">

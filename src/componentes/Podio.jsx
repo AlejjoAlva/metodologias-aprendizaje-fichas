@@ -13,7 +13,7 @@ export default function Podio({ estado, fichas }) {
               <span className="escalon-nombre">{t.nombre}</span>
               <span className="escalon-pts">{t.total} pts</span>
               <span className="escalon-desglose">
-                {m[t.id]?.participacion ?? 0} participación · {m[t.id]?.prediccion ?? 0} predicción ·{' '}
+                {m[t.id]?.participacion ?? 0} participación · {m[t.id]?.prediccion ?? 0} predicción de evidencia ·{' '}
                 {m[t.id]?.argumento ?? 0} argumento · {m[t.id]?.rachas ?? 0} rachas
               </span>
               <span className="escalon-base">{t.posicion}</span>

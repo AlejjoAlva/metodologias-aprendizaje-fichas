@@ -277,7 +277,7 @@ function Resultado({ estado }) {
           <span className="rev-aciertos">
             🎯 {r.aciertos} de {r.predijeron} lo acertaron
           </span>
-          {r.aciertosNombres?.length > 0 && <span className="rev-nombres">{r.aciertosNombres.join(' · ')}</span>}
+          <span className="rev-nombres">Sus nombres llevan 🎯 en la lista de votos.</span>
         </div>
         <div className="rev-textos">
           {rev.texto && (

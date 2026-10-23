@@ -1579,7 +1579,7 @@ button {
 
 .revelacion {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1.5fr);
   gap: 1.6vw;
   align-items: stretch;
 }
@@ -1695,4 +1695,77 @@ button {
 
 .cajon > * {
   flex-shrink: 0;
+}
+
+/* Resultado compacto: con 30 personas todo debe caber sin scroll */
+.centro-turno:has(.resultado) {
+  gap: 1.4vh;
+}
+
+.tarjeta-ficha.compacta .tf-orador {
+  font-size: 2.2vh;
+}
+
+.tarjeta-ficha.compacta .tf-nombre {
+  font-size: 3.6vh;
+  margin-top: 0.2vh;
+}
+
+.tarjeta-ficha.compacta .tf-cat {
+  font-size: 1.8vh;
+  margin-top: 0.2vh;
+}
+
+.resultado {
+  gap: 1.4vh;
+}
+
+.resultado .rev-nivel {
+  padding: 1.2vh 1vw;
+  gap: 0.4vh;
+}
+
+.resultado .rev-valor {
+  font-size: 3.8vh;
+  white-space: nowrap;
+}
+
+.resultado .rev-ayuda {
+  font-size: 1.8vh;
+}
+
+.resultado .rev-aciertos {
+  font-size: 2.1vh;
+}
+
+.resultado .rev-nombres {
+  font-size: 1.6vh;
+  max-height: 6.6vh;
+  overflow: hidden;
+}
+
+.resultado .rev-textos {
+  font-size: 2vh;
+  max-height: 24vh;
+}
+
+.resultado .cifras.grandes .cifra {
+  font-size: 4.2vh;
+}
+
+.resultado .cifras.grandes .cifra-txt {
+  font-size: 1.6vh;
+}
+
+.resultado .votos {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.4vh 0.5vw;
+  min-height: 0;
+}
+
+.resultado .votos li {
+  font-size: 1.6vh;
+  padding: 0.3vh 0.5vw;
+  grid-template-columns: minmax(0, 1fr) auto auto 2.2vh auto;
+  gap: 0.3vw;
 }
