@@ -111,6 +111,7 @@ function Tablero() {
     if (hecho.current.has(clave)) return
     hecho.current.add(clave)
     fn().catch((e) => {
+      if (e?.name === 'YaHecho') return // otra pantalla abierta ya hizo este paso
       console.error(clave, e)
       hecho.current.delete(clave)
       setFallo(`No se pudo completar (${clave.split(':')[0]}). Revisa la conexión.`)
@@ -194,6 +195,7 @@ function Tablero() {
       else if (fase === FASES.ARGUMENTO) unaVez(`voto:${k}`, () => pasarA(db, estado, FASES.VOTO))
       else if (fase === FASES.VOTO) unaVez(`cierre:${k}`, () => cerrarTurno(db, estado, ctx))
     } catch (e) {
+      if (e?.name === 'YaHecho') return
       console.error(e)
       setFallo('No se pudo avanzar. Revisa la conexión e intenta otra vez.')
     }

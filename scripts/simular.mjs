@@ -291,7 +291,11 @@ async function main() {
     ok(!orVota, `turno ${t + 1}: el orador no puede votar su turno`)
 
     ctx = await contexto(host)
-    const { resultado, marcador } = await cerrarTurno(host.db, e, ctx)
+    // Dos pantallas cerrando a la vez: solo una cuenta el turno.
+    const cierres = await Promise.allSettled([cerrarTurno(host.db, e, ctx), cerrarTurno(host.db, e, ctx)])
+    const buenos = cierres.filter((c) => c.status === 'fulfilled')
+    ok(buenos.length === 1 && cierres.some((c) => c.reason?.name === 'YaHecho'), `turno ${t + 1}: un cierre doble cuenta una sola vez`)
+    const { resultado, marcador } = buenos[0].value
     const esperado = calcularTurno({
       reto: e.reto,
       nivel: nivelDe[e.fichaId],

@@ -7,6 +7,7 @@ import {
   getDoc,
   getDocs,
   query,
+  runTransaction,
   serverTimestamp,
   updateDoc,
   where,
@@ -55,6 +56,29 @@ export function estadoInicial(generacion = 0, codigo = codigoSala()) {
     eventos: [],
     repartoVersion: 0,
   }
+}
+
+/** La fase ya cambió (otra pantalla abierta se adelantó): no se repite el paso. */
+export class YaHecho extends Error {
+  constructor() {
+    super('ya hecho')
+    this.name = 'YaHecho'
+  }
+}
+
+/**
+ * Escribe solo si el estado sigue en la misma generación, turno y fase que vio quien llama.
+ * Así dos pantallas abiertas a la vez no giran dos veces ni cierran dos veces un turno.
+ * `escribir(tx)` usa tx.set / tx.update igual que un lote.
+ */
+async function enFase(db, estado, escribir, extra = () => true) {
+  return runTransaction(db, async (tx) => {
+    const s = await tx.get(doc(db, ESTADO))
+    const e = s.data()
+    if (!e || e.generacion !== estado.generacion || e.turno !== estado.turno || e.fase !== estado.fase || !extra(e))
+      throw new YaHecho()
+    escribir(tx)
+  })
 }
 
 const evento = (estado, texto) => [...(estado.eventos || []), { texto, t: Date.now() }].slice(-MAX_EVENTOS)
@@ -159,31 +183,31 @@ export async function asignarFichas(db, estado, persona, fichas, niveles = {}, r
 
 /** Ruleta 1. Devuelve false si no queda nadie por pasar. */
 export async function girarPersona(db, estado, { personas, conectados, fichas, excluir = [], rnd = Math.random }) {
-  const conFichas = new Set(
-    fichas.filter((f) => f.dueno && (f.estado === 'repartida')).map((f) => f.dueno),
-  )
+  const conFichas = new Set(fichas.filter((f) => f.dueno && f.estado === 'repartida').map((f) => f.dueno))
   const candidatos = candidatosRuleta(personas, conectados, conFichas).filter((id) => !excluir.includes(id))
   const elegido = sortear(candidatos, rnd)
   if (!elegido) return false
   const p = personas.find((x) => x.id === elegido)
   const candidatas = fichas.filter((f) => f.dueno === elegido && f.estado === 'repartida').map((f) => f.n)
-  await updateDoc(doc(db, ESTADO), {
-    fase: FASES.RULETA_PERSONA,
-    turno: estado.turno + 1,
-    oradorId: elegido,
-    oradorNombre: p.nombre,
-    oradorUids: p.uids,
-    candidatasFicha: candidatas,
-    fichaId: null,
-    ficha: null,
-    retoSorteo: null,
-    reto: null,
-    cronoInicio: null,
-    duracion: 0,
-    resultado: null,
-    ruletaPersonas: candidatos.map((id) => personas.find((x) => x.id === id).nombre),
-    eventos: evento(estado, `🎯 La ruleta eligió a ${p.nombre}`),
-  })
+  await enFase(db, estado, (tx) =>
+    tx.update(doc(db, ESTADO), {
+      fase: FASES.RULETA_PERSONA,
+      turno: estado.turno + 1,
+      oradorId: elegido,
+      oradorNombre: p.nombre,
+      oradorUids: p.uids,
+      candidatasFicha: candidatas,
+      fichaId: null,
+      ficha: null,
+      retoSorteo: null,
+      reto: null,
+      cronoInicio: null,
+      duracion: 0,
+      resultado: null,
+      ruletaPersonas: candidatos.map((id) => personas.find((x) => x.id === id).nombre),
+      eventos: evento(estado, `🎯 La ruleta eligió a ${p.nombre}`),
+    }),
+  )
   return true
 }
 
@@ -191,21 +215,21 @@ export async function girarPersona(db, estado, { personas, conectados, fichas, e
 export async function girarFicha(db, estado, fichas, rnd = Math.random) {
   const n = sortear(estado.candidatasFicha, rnd)
   const f = fichas.find((x) => x.n === n)
-  const batch = writeBatch(db)
-  batch.update(doc(db, 'fichas', String(n)), { estado: 'en_juego' })
-  batch.update(doc(db, ESTADO), {
-    fase: FASES.RULETA_FICHA,
-    fichaId: n,
-    ficha: {
-      nombre: f.nombre,
-      categoria: f.categoria,
-      que_es: f.que_es ?? f.descripcion ?? '',
-      ejemplo: f.ejemplo ?? '',
-      como_se_aplica: f.como_se_aplica ?? '',
-    },
-    eventos: evento(estado, `🃏 ${estado.oradorNombre} juega «${f.nombre}»`),
+  await enFase(db, estado, (batch) => {
+    batch.update(doc(db, 'fichas', String(n)), { estado: 'en_juego' })
+    batch.update(doc(db, ESTADO), {
+      fase: FASES.RULETA_FICHA,
+      fichaId: n,
+      ficha: {
+        nombre: f.nombre,
+        categoria: f.categoria,
+        que_es: f.que_es ?? f.descripcion ?? '',
+        ejemplo: f.ejemplo ?? '',
+        como_se_aplica: f.como_se_aplica ?? '',
+      },
+      eventos: evento(estado, `🃏 ${estado.oradorNombre} juega «${f.nombre}»`),
+    })
   })
-  await batch.commit()
 }
 
 const TEXTO_RETO = { aplicala: 'Aplícala', defiende: 'Defiende', ataca: 'Ataca', elige: 'Tú eliges' }
@@ -214,26 +238,37 @@ const TEXTO_RETO = { aplicala: 'Aplícala', defiende: 'Defiende', ataca: 'Ataca'
 export async function girarReto(db, estado, rnd = Math.random) {
   const { pesosReto, duracion } = ajustesDe(estado)
   const s = sortearReto(rnd, pesosReto)
-  await updateDoc(doc(db, ESTADO), {
-    fase: FASES.RULETA_RETO,
-    retoSorteo: s,
-    reto: s === 'elige' ? null : s,
-    cronoInicio: s === 'elige' ? serverTimestamp() : null,
-    duracion: s === 'elige' ? duracion.elige : 0,
-    eventos: evento(estado, s === 'elige' ? `🎲 ${estado.oradorNombre} elige su reto` : `🎲 Reto: ${TEXTO_RETO[s]}`),
-  })
+  await enFase(db, estado, (tx) =>
+    tx.update(doc(db, ESTADO), {
+      fase: FASES.RULETA_RETO,
+      retoSorteo: s,
+      reto: s === 'elige' ? null : s,
+      cronoInicio: s === 'elige' ? serverTimestamp() : null,
+      duracion: s === 'elige' ? duracion.elige : 0,
+      eventos: evento(estado, s === 'elige' ? `🎲 ${estado.oradorNombre} elige su reto` : `🎲 Reto: ${TEXTO_RETO[s]}`),
+    }),
+  )
 }
 
 /** Cierra "Tú eliges": lo que eligió el orador o, si no eligió, un sorteo entre los otros tres. */
 export async function resolverEleccion(db, estado, rnd = Math.random) {
   const snap = await getDoc(doc(db, 'reto', `${estado.generacion}_${estado.turno}`))
   const eleccion = snap.exists() ? snap.data().eleccion : sortearSinElegir(rnd, ajustesDe(estado).pesosReto)
-  await updateDoc(doc(db, ESTADO), {
-    reto: eleccion,
-    cronoInicio: null,
-    duracion: 0,
-    eventos: evento(estado, `${snap.exists() ? '🗣️ Eligió' : '🎲 No eligió a tiempo; salió'}: ${TEXTO_RETO[eleccion]}`),
-  })
+  await enFase(
+    db,
+    estado,
+    (tx) =>
+      tx.update(doc(db, ESTADO), {
+        reto: eleccion,
+        cronoInicio: null,
+        duracion: 0,
+        eventos: evento(
+          estado,
+          `${snap.exists() ? '🗣️ Eligió' : '🎲 No eligió a tiempo; salió'}: ${TEXTO_RETO[eleccion]}`,
+        ),
+      }),
+    (e) => !e.reto,
+  )
   return eleccion
 }
 
@@ -244,12 +279,14 @@ export async function pasarA(db, estado, fase) {
     [FASES.ARGUMENTO]: `🎤 Argumenta ${estado.oradorNombre}`,
     [FASES.VOTO]: '🗳️ Voto final',
   }[fase]
-  await updateDoc(doc(db, ESTADO), {
-    fase,
-    cronoInicio: null,
-    duracion: ajustesDe(estado).duracion[fase] || 0,
-    eventos: texto ? evento(estado, texto) : estado.eventos,
-  })
+  await enFase(db, estado, (tx) =>
+    tx.update(doc(db, ESTADO), {
+      fase,
+      cronoInicio: null,
+      duracion: ajustesDe(estado).duracion[fase] || 0,
+      eventos: texto ? evento(estado, texto) : estado.eventos,
+    }),
+  )
 }
 
 export async function iniciarCrono(db, estado) {
@@ -259,10 +296,7 @@ export async function iniciarCrono(db, estado) {
   })
 }
 
-const delTurno = (estado) => [
-  where('generacion', '==', estado.generacion),
-  where('turno', '==', estado.turno),
-]
+const delTurno = (estado) => [where('generacion', '==', estado.generacion), where('turno', '==', estado.turno)]
 
 /** Lee respuestas de una fase del turno vigente, indexadas por personaId. */
 export async function leerRespuestas(db, estado, fase) {
@@ -273,7 +307,10 @@ export async function leerRespuestas(db, estado, fase) {
 /** Sentimientos del turno, solo de celulares que de verdad pertenecen a esa persona. */
 export async function leerSentimientos(db, estado, personas) {
   const snap = await getDocs(query(collection(db, 'sentimiento'), ...delTurno(estado)))
-  return sentimientosValidos(snap.docs.map((d) => ({ uid: d.id, ...d.data() })), personas)
+  return sentimientosValidos(
+    snap.docs.map((d) => ({ uid: d.id, ...d.data() })),
+    personas,
+  )
 }
 
 export function sentimientosValidos(lista, personas) {
@@ -371,37 +408,37 @@ export async function cerrarTurno(db, estado, { personas, conectados }) {
     detalle,
   }
 
-  const batch = writeBatch(db)
-  batch.set(doc(db, 'turnos', `${estado.generacion}_${estado.turno}`), {
-    generacion: estado.generacion,
-    turno: estado.turno,
-    oradorId: estado.oradorId,
-    oradorNombre: estado.oradorNombre,
-    fichaId: estado.fichaId,
-    ficha: estado.ficha?.nombre ?? null,
-    categoria: estado.ficha?.categoria ?? null,
-    retoSorteo: estado.retoSorteo ?? null,
-    reto,
-    revelacion,
-    resultado,
-    puntosTurno: calculo.puntosTurno,
-    creado: serverTimestamp(),
+  await enFase(db, estado, (batch) => {
+    batch.set(doc(db, 'turnos', `${estado.generacion}_${estado.turno}`), {
+      generacion: estado.generacion,
+      turno: estado.turno,
+      oradorId: estado.oradorId,
+      oradorNombre: estado.oradorNombre,
+      fichaId: estado.fichaId,
+      ficha: estado.ficha?.nombre ?? null,
+      categoria: estado.ficha?.categoria ?? null,
+      retoSorteo: estado.retoSorteo ?? null,
+      reto,
+      revelacion,
+      resultado,
+      puntosTurno: calculo.puntosTurno,
+      creado: serverTimestamp(),
+    })
+    batch.update(doc(db, 'personas', estado.oradorId), { paso: true })
+    if (estado.fichaId != null) batch.update(doc(db, 'fichas', String(estado.fichaId)), { estado: 'jugada' })
+    batch.update(doc(db, ESTADO), {
+      fase: FASES.RESULTADO,
+      cronoInicio: serverTimestamp(),
+      duracion: duracion.resultado,
+      resultado,
+      marcador,
+      top: topConNombres(marcador, nombre, 10),
+      eventos: evento(
+        estado,
+        `✅ «${estado.ficha?.nombre}» es ${revelacion.nivel ?? '¿?'} · ${calculo.pctSi ?? 0}% le sirve · ${estado.oradorNombre} +${resultado.puntosOrador} pts`,
+      ),
+    })
   })
-  batch.update(doc(db, 'personas', estado.oradorId), { paso: true })
-  if (estado.fichaId != null) batch.update(doc(db, 'fichas', String(estado.fichaId)), { estado: 'jugada' })
-  batch.update(doc(db, ESTADO), {
-    fase: FASES.RESULTADO,
-    cronoInicio: serverTimestamp(),
-    duracion: duracion.resultado,
-    resultado,
-    marcador,
-    top: topConNombres(marcador, nombre, 10),
-    eventos: evento(
-      estado,
-      `✅ «${estado.ficha?.nombre}» es ${revelacion.nivel ?? '¿?'} · ${calculo.pctSi ?? 0}% le sirve · ${estado.oradorNombre} +${resultado.puntosOrador} pts`,
-    ),
-  })
-  await batch.commit()
   return { calculo, resultado, marcador }
 }
 
@@ -419,18 +456,18 @@ export function topConNombres(marcador, nombre, n = 10) {
 
 /** Salta el turno: la ficha vuelve a la mano y la persona sigue pendiente. */
 export async function saltarTurno(db, estado) {
-  const batch = writeBatch(db)
-  if (estado.fichaId != null) batch.update(doc(db, 'fichas', String(estado.fichaId)), { estado: 'repartida' })
-  batch.update(doc(db, ESTADO), {
-    fase: FASES.RESULTADO,
-    resultado: { saltado: true },
-    cronoInicio: null,
-    duracion: 0,
-    fichaId: null,
-    ficha: null,
-    eventos: evento(estado, `⏭️ Se saltó el turno de ${estado.oradorNombre}`),
+  await enFase(db, estado, (batch) => {
+    if (estado.fichaId != null) batch.update(doc(db, 'fichas', String(estado.fichaId)), { estado: 'repartida' })
+    batch.update(doc(db, ESTADO), {
+      fase: FASES.RESULTADO,
+      resultado: { saltado: true },
+      cronoInicio: null,
+      duracion: 0,
+      fichaId: null,
+      ficha: null,
+      eventos: evento(estado, `⏭️ Se saltó el turno de ${estado.oradorNombre}`),
+    })
   })
-  await batch.commit()
 }
 
 export async function terminarPartida(db, estado, personas) {

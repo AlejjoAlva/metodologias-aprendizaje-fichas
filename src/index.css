@@ -816,13 +816,14 @@ button {
 }
 
 .sala-titulo {
-  font-size: 5.5vh;
+  font-size: 4.6vh;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .sala-url {
   font-family: var(--mono);
-  font-size: 2.4vh;
+  font-size: 2vh;
   color: var(--acento);
   word-break: break-all;
 }
@@ -1578,7 +1579,7 @@ button {
 
 .revelacion {
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.6fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
   gap: 1.6vw;
   align-items: stretch;
 }
@@ -1611,9 +1612,10 @@ button {
 }
 
 .rev-valor {
-  font-size: 6vh;
+  font-size: 5.2vh;
   font-weight: 800;
-  line-height: 1;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
 }
 
 .rev-ayuda {
@@ -1689,4 +1691,8 @@ button {
 
 .rev-valor-cel.nivel-no {
   color: var(--no);
+}
+
+.cajon > * {
+  flex-shrink: 0;
 }
