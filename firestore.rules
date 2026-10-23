@@ -1,0 +1,95 @@
+rules_version = '2';
+// Anfitrión = la cuenta de correo de la pantalla grande. Es la única que mueve el juego.
+// Los celulares (usuarios anónimos) solo se inscriben y responden, una vez y a tiempo.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function autenticado() { return request.auth != null; }
+    function anfitrion() { return autenticado() && request.auth.uid == 'UID_ANFITRION'; }
+    function estado() { return get(/databases/$(database)/documents/juego/estado).data; }
+
+    match /juego/estado {
+      allow read: if autenticado();
+      allow write: if anfitrion();
+    }
+
+    match /fichas/{n} {
+      allow read: if autenticado();
+      allow write: if anfitrion();
+    }
+
+    match /turnos/{id} {
+      allow read: if autenticado();
+      allow write: if anfitrion();
+    }
+
+    // La inscripción usa el uid como id de persona. Con el código de sala y la generación vigentes.
+    match /personas/{personaId} {
+      allow read: if autenticado();
+      allow create: if autenticado()
+        && personaId == request.auth.uid
+        && request.resource.data.keys().hasOnly(['nombre', 'uids', 'codigoSala', 'generacion', 'creado', 'paso', 'ausente'])
+        && request.resource.data.uids == [request.auth.uid]
+        && request.resource.data.nombre is string
+        && request.resource.data.nombre.size() > 0
+        && request.resource.data.nombre.size() <= 30
+        && request.resource.data.paso == false
+        && request.resource.data.ausente == false
+        && request.resource.data.codigoSala == estado().codigoSala
+        && request.resource.data.generacion == estado().generacion;
+      allow update, delete: if anfitrion();
+    }
+
+    // Código de recuperación: lo escribe el celular al inscribirse y solo lo lee el anfitrión.
+    match /codigos/{personaId} {
+      allow read: if anfitrion();
+      allow create: if autenticado() && personaId == request.auth.uid
+        && request.resource.data.keys().hasOnly(['codigo'])
+        && request.resource.data.codigo is string
+        && request.resource.data.codigo.size() == 4;
+    }
+
+    // Pedido de recuperación desde otro navegador. La pantalla lo verifica contra `codigos`.
+    match /reclamos/{uid} {
+      allow read: if anfitrion() || (autenticado() && uid == request.auth.uid);
+      allow create: if autenticado() && uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['nombre', 'codigo', 'creado'])
+        && request.resource.data.codigo is string;
+      allow update, delete: if anfitrion();
+    }
+
+    // Una respuesta por persona, turno y fase. Solo se crea, en la fase vigente y antes de que
+    // venza el cronómetro, con la hora del servidor (no la del celular).
+    match /respuestas/{id} {
+      // Nadie ve votos ajenos mientras se vota: los revela la pantalla al cerrar la fase.
+      allow read: if anfitrion() || (autenticado() && resource.data.uid == request.auth.uid);
+      allow create: if autenticado()
+        && request.resource.data.uid == request.auth.uid
+        && id == string(request.resource.data.generacion) + '_' + string(request.resource.data.turno)
+                 + '_' + request.resource.data.fase + '_' + request.resource.data.personaId
+        && request.auth.uid in get(/databases/$(database)/documents/personas/$(request.resource.data.personaId)).data.uids
+        && request.resource.data.personaId != estado().oradorId
+        && request.resource.data.fase == estado().fase
+        && request.resource.data.turno == estado().turno
+        && request.resource.data.generacion == estado().generacion
+        && estado().cronoInicio != null
+        && request.time < estado().cronoInicio + duration.value(estado().duracion + 1, 's');
+    }
+
+    // Barra y reacciones: cada celular sobrescribe solo el suyo. Solo lo escucha la pantalla.
+    match /sentimiento/{uid} {
+      allow read: if anfitrion();
+      allow write: if autenticado() && uid == request.auth.uid;
+    }
+
+    // "Tú eliges": solo el orador, solo durante la ruleta de postura, una vez.
+    match /postura/{id} {
+      allow read: if autenticado();
+      allow create: if autenticado()
+        && request.auth.uid in estado().oradorUids
+        && estado().fase == 'ruleta_postura'
+        && id == string(estado().generacion) + '_' + string(estado().turno)
+        && request.resource.data.eleccion in ['defiende', 'ataca'];
+    }
+  }
+}
