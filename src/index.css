@@ -1972,3 +1972,191 @@ button {
   cursor: pointer;
   font-weight: 700;
 }
+
+/* Actividad en vivo (columna derecha) */
+.pt-conectados {
+  flex: 0 1 auto !important;
+  max-height: 30vh;
+  overflow: hidden;
+}
+
+.actividad {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5vh;
+  font-size: 1.8vh;
+  overflow: hidden;
+}
+
+.actividad li {
+  padding: 0.3vh 0;
+  border-bottom: 1px solid var(--papel-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: entra 0.4s ease-out;
+}
+
+.actividad li.juego {
+  color: var(--acento);
+  font-weight: 600;
+}
+
+@keyframes entra {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+/* Evento sorpresa */
+.sorpresa {
+  position: fixed;
+  top: 22vh;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 15;
+  background: var(--tinta);
+  color: #fff;
+  border: 0.5vh solid var(--oro);
+  border-radius: 2vh;
+  padding: 3vh 4vw;
+  text-align: center;
+  box-shadow: 0 2vh 6vh rgb(0 0 0 / 0.35);
+  animation: entra 0.5s ease-out;
+}
+
+.sorpresa-titulo {
+  font-size: 3vh;
+  color: var(--oro);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.sorpresa-txt {
+  font-size: 4.6vh;
+  margin-top: 1vh;
+}
+
+/* Plan B */
+.banda-sin-red {
+  position: fixed;
+  bottom: 9vh;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 16;
+  background: var(--no);
+  color: #fff;
+  border: 0;
+  border-radius: 999px;
+  padding: 1vh 2vw;
+  font: inherit;
+  font-size: 2vh;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.emergencia {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: var(--papel);
+  display: grid;
+  place-items: center;
+  padding: 3vh 3vw;
+  overflow: auto;
+}
+
+.emergencia-caja {
+  width: min(1100px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 1.6vh;
+}
+
+.emergencia-caja h2 {
+  font-size: clamp(1.6rem, 5vh, 3.4rem);
+}
+
+.emergencia-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  columns: 2;
+  column-gap: 3vw;
+  font-size: clamp(1rem, 2.6vh, 1.8rem);
+}
+
+.emergencia-lista li {
+  display: grid;
+  grid-template-columns: 2.4em 1fr auto;
+  gap: 0.6em;
+  padding: 0.5vh 0;
+  border-bottom: 1px solid var(--linea);
+  break-inside: avoid;
+}
+
+.emergencia-lista .e-pos {
+  font-family: var(--mono);
+  color: var(--tinta-2);
+}
+
+.emergencia-lista .e-pts {
+  font-family: var(--mono);
+  font-weight: 700;
+}
+
+.emergencia-lista li.e-pos1 {
+  font-size: 1.3em;
+  color: var(--oro);
+  font-weight: 800;
+}
+
+.emergencia-lista li.e-pos2,
+.emergencia-lista li.e-pos3 {
+  font-weight: 700;
+}
+
+@media (max-width: 700px) {
+  .emergencia-lista {
+    columns: 1;
+  }
+}
+
+.instructivo summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.instructivo h4 {
+  margin: 12px 0 4px;
+  font-size: 0.95rem;
+}
+
+.instructivo p,
+.instructivo li {
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.instructivo ol,
+.instructivo ul {
+  margin: 4px 0;
+  padding-left: 1.2em;
+}
+
+.sorpresa-cel {
+  background: var(--tinta);
+  color: #fff;
+  font-weight: 700;
+  border: 2px solid var(--oro);
+}
+
+.actividad li {
+  line-height: 1.4;
+  flex-shrink: 0;
+}

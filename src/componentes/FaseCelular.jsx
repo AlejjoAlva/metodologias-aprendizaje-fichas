@@ -3,7 +3,6 @@ import { db } from '../lib/firebase'
 import { useRestante } from '../lib/datos'
 import { FASES, textoReto } from '../lib/juego'
 import {
-  ajustesDe,
   INTERVALO_SENTIMIENTO_MS,
   NIVELES_EVIDENCIA,
   REACCIONES,
@@ -26,6 +25,7 @@ export default function FaseCelular({ uid, persona, estado }) {
       <section className="tarjeta centro">
         <p className="grande">Ya estás dentro 🙌</p>
         <p className="ayuda">Mira la pantalla grande. Cuando el anfitrión inicie, te llegan tus 2 fichas.</p>
+        <p className="ayuda">Mientras tanto, lee cómo se juega 👇</p>
       </section>
     )
 
@@ -33,6 +33,7 @@ export default function FaseCelular({ uid, persona, estado }) {
 
   return (
     <>
+      <Sorpresa persona={persona} estado={estado} />
       <FichaEnJuego estado={estado} soyOrador={soyOrador} />
       {soyOrador && fase === FASES.IMPRESION ? (
         <>
@@ -351,6 +352,26 @@ function Sentimiento({ uid, persona, estado }) {
   )
 }
 
+/** Aviso del evento sorpresa (unos segundos, más fuerte si te toca). */
+function Sorpresa({ persona, estado }) {
+  const s = estado.sorpresa
+  const [, refrescar] = useState(0)
+  useEffect(() => {
+    if (!s) return undefined
+    const t = setTimeout(() => refrescar((x) => x + 1), 15000)
+    return () => clearTimeout(t)
+  }, [s])
+  if (!s || Date.now() - s.t > 15000) return null
+  const pts = `${s.puntos} ${s.puntos === 1 ? 'punto' : 'puntos'}`
+  const txt =
+    s.ladron === persona.id
+      ? `¡Le robaste ${pts} a ${s.victimaNombre}!`
+      : s.victima === persona.id
+        ? `${s.ladronNombre} te robó ${pts} 😱`
+        : `${s.ladronNombre} le robó ${pts} a ${s.victimaNombre}`
+  return <section className="aviso sorpresa-cel">⚡ {txt}</section>
+}
+
 function Motivos({ lista }) {
   if (!lista?.length) return null
   return (
@@ -359,39 +380,6 @@ function Motivos({ lista }) {
         <li key={m}>{m}</li>
       ))}
     </ul>
-  )
-}
-
-/** Cómo se ganan puntos, con los valores vigentes del cajón. */
-export function ComoGanar({ estado }) {
-  const P = ajustesDe(estado).puntos
-  return (
-    <details className="mis-fichas como-ganar">
-      <summary>¿Cómo gano puntos?</summary>
-      <p className="ayuda">En cada turno (hasta {P.impresion + P.reaccion + P.voto + P.prediccion} puntos):</p>
-      <ul className="motivos">
-        <li>Responder las tres preguntas de la primera impresión: +{P.impresion}</li>
-        <li>Acertar el nivel de evidencia de la ficha: +{P.prediccion}</li>
-        <li>Reaccionar al menos una vez mientras alguien argumenta: +{P.reaccion}</li>
-        <li>Votar al final (me sirve + nota): +{P.voto}</li>
-        <li>
-          Cada {P.rachaCada} turnos seguidos con impresión y voto: +{P.racha}
-        </li>
-      </ul>
-      <p className="ayuda">Cuando te toca argumentar:</p>
-      <ul className="motivos">
-        <li>Base +{P.oradorBase}, más la nota promedio × {P.oradorPorNota}</li>
-        <li>
-          +{P.oradorPorDiezPct} por cada 10 % de la sala que convenzas (máx. {P.oradorPersuasionMax}); si casi todos ya
-          pensaban como tú, +{P.persuasionFija} fijos
-        </li>
-        <li>
-          Contracorriente +{P.contracorriente}: atacar una ficha respaldada o defender una poco respaldada, con nota de{' '}
-          {P.contracorrienteNota} o más
-        </li>
-      </ul>
-      <p className="ayuda">Nunca se restan puntos.</p>
-    </details>
   )
 }
 

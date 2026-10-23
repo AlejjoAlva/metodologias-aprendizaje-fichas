@@ -18,6 +18,7 @@ import {
   girarFicha,
   girarPersona,
   girarReto,
+  lanzarRobo,
   leerNiveles,
   migrarFichasViejas,
   pasarA,
@@ -33,6 +34,15 @@ import fichasCsv from '../datos/fichas.csv?raw'
 import CentroPantalla from '../componentes/CentroPantalla'
 import ListaFichas from '../componentes/ListaFichas'
 import Controles from '../componentes/Controles'
+import Actividad from '../componentes/Actividad'
+import PodioEmergencia from '../componentes/Emergencia'
+import { guardarRespaldo } from '../lib/respaldo'
+import { ajustesDe } from '../lib/config'
+
+// Errores de Firebase que indican que el servicio no responde (cuota agotada, caída, sin red).
+const CAIDA = ['resource-exhausted', 'unavailable', 'deadline-exceeded']
+// El evento sorpresa automático espera un poco en el Resultado para no tapar la revelación.
+const ESPERA_SORPRESA_MS = 12000
 
 // Cuánto dura la animación de cada ruleta antes de pasar sola a la siguiente.
 const PAUSA_RULETA_MS = { [FASES.RULETA_PERSONA]: 6000, [FASES.RULETA_FICHA]: 5000, [FASES.RULETA_RETO]: 4500 }
@@ -80,6 +90,11 @@ function Login({ onListo }) {
   )
 }
 
+const motivoCaida = (code) =>
+  code === 'resource-exhausted'
+    ? 'Se agotó la cuota gratuita de Firebase por hoy. Estos son los puntos hasta el último turno cerrado.'
+    : 'Firebase no responde. Estos son los puntos hasta el último turno cerrado.'
+
 function Tablero() {
   const { estado, error } = useEstado()
   const fichasBase = useMemo(() => leerFichas(fichasCsv).fichas, [])
@@ -98,6 +113,8 @@ function Tablero() {
   const idsVigentes = new Set(personas.map((p) => p.id))
   const respuestas = todasRespuestas.filter((r) => idsVigentes.has(r.personaId))
   const [fallo, setFallo] = useState(null)
+  const [emergencia, setEmergencia] = useState(null) // motivo del podio de emergencia, o null
+  const [sinRed, setSinRed] = useState(!navigator.onLine)
   const hecho = useRef(new Set())
   // Niveles de evidencia solo para repartir sin repetir nivel. Se leen al repartir y no se muestran.
   const niveles = useRef(null)
@@ -121,10 +138,53 @@ function Tablero() {
       }
       console.error(clave, e)
       registrar(db, 'pantalla', 'error', `${clave} · ${textoError(e)}`, { estado })
+      if (CAIDA.includes(e?.code)) setEmergencia(motivoCaida(e.code))
       hecho.current.delete(clave)
       setFallo(`No se pudo completar (${clave.split(':')[0]}). Revisa la conexión.`)
     })
   }
+
+  // Respaldo local del marcador: cada vez que cambian los puntos o el podio.
+  const nombreMapa = useMemo(() => Object.fromEntries(personas.map((p) => [p.id, p.nombre])), [personas])
+  useEffect(() => {
+    if (estado?.marcador && personas.length) guardarRespaldo(estado, nombreMapa)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estado?.marcador, estado?.premios, nombreMapa])
+
+  useEffect(() => {
+    const fuera = () => setSinRed(true)
+    const dentro = () => setSinRed(false)
+    window.addEventListener('offline', fuera)
+    window.addEventListener('online', dentro)
+    return () => {
+      window.removeEventListener('offline', fuera)
+      window.removeEventListener('online', dentro)
+    }
+  }, [])
+
+  // Evento sorpresa automático cada N turnos (0 = solo manual), unos segundos después del Resultado.
+  const roboCada = ajustesDe(estado).puntos.roboCada
+  useEffect(() => {
+    if (fase !== FASES.RESULTADO || !roboCada || !estado?.turno || estado.turno % roboCada || estado.resultado?.saltado)
+      return undefined
+    const t = setTimeout(
+      () => unaVez(`robo:${estado.generacion}_${estado.turno}`, () => lanzarRobo(db, { personas, conectados })),
+      ESPERA_SORPRESA_MS,
+    )
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fase, estado?.turno, roboCada])
+
+  // Aviso del evento sorpresa en la pantalla grande durante unos segundos.
+  const [ahora, setAhora] = useState(Date.now())
+  const sorpresaViva = estado?.sorpresa && ahora - estado.sorpresa.t < 10000
+  const sorpresaT = estado?.sorpresa?.t
+  useEffect(() => {
+    if (!sorpresaT) return undefined
+    setAhora(Date.now())
+    const t = setTimeout(() => setAhora(Date.now()), 10500)
+    return () => clearTimeout(t)
+  }, [sorpresaT])
 
   useEffect(() => {
     if (estado === null) prepararSala(db, fichasBase).catch((e) => setFallo(String(e.message || e)))
@@ -183,7 +243,12 @@ function Tablero() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reclamos.length, personas.length])
 
-  if (error) return <main className="pantalla-login"><p className="aviso error">Sin permiso o sin conexión: {error.message}</p></main>
+  if (error)
+    return (
+      <PodioEmergencia
+        motivo={`Firebase no responde (${error.code ?? error.message}). Estos son los puntos guardados en este computador.`}
+      />
+    )
   if (!estado) return <main className="pantalla-login"><p>Preparando la sala…</p></main>
 
   const urlSala = `${location.origin}/?sala=${estado.codigoSala}`
@@ -206,6 +271,7 @@ function Tablero() {
       if (e?.name === 'YaHecho') return
       console.error(e)
       registrar(db, 'pantalla', 'error', `siguiente · ${textoError(e)}`, { estado })
+      if (CAIDA.includes(e?.code)) setEmergencia(motivoCaida(e.code))
       setFallo('No se pudo avanzar. Revisa la conexión e intenta otra vez.')
     }
   }
@@ -263,7 +329,7 @@ function Tablero() {
             </ol>
           )}
         </section>
-        <section className="pt-bloque">
+        <section className="pt-bloque pt-conectados">
           <h3>
             Conectados <span className="num">{presentes.length}</span>
             <span className="ayuda"> / {personas.length} inscritos</span>
@@ -281,7 +347,30 @@ function Tablero() {
             </>
           )}
         </section>
+        <section className="pt-bloque">
+          <h3>Actividad en vivo</h3>
+          <Actividad respuestas={respuestas} sentimientos={sentimientos} nombre={nombre} estado={estado} />
+        </section>
       </aside>
+
+      {sorpresaViva && (
+        <div className="sorpresa">
+          <p className="sorpresa-titulo">⚡ Evento sorpresa</p>
+          <p className="sorpresa-txt">
+            <strong>{estado.sorpresa.ladronNombre}</strong> le robó <strong>
+              {estado.sorpresa.puntos} {estado.sorpresa.puntos === 1 ? 'punto' : 'puntos'}
+            </strong> a{' '}
+            <strong>{estado.sorpresa.victimaNombre}</strong>
+          </p>
+        </div>
+      )}
+
+      {(sinRed || emergencia) && !emergencia && (
+        <button className="banda-sin-red" onClick={() => setEmergencia('Sin internet en este computador.')}>
+          Sin internet · ver resultados guardados
+        </button>
+      )}
+      {emergencia && <PodioEmergencia motivo={emergencia} onCerrar={() => setEmergencia(null)} />}
 
       <footer className="pt-eventos">
         {(estado.eventos || []).slice(-3).map((e) => (
@@ -299,6 +388,8 @@ function Tablero() {
         fichas={fichas}
         onSiguiente={siguiente}
         conNiveles={conNiveles}
+        onEmergencia={(code) => setEmergencia(motivoCaida(code))}
+        onVerRespaldo={() => setEmergencia('Vista manual del respaldo.')}
         onSaltar={() => {
           if (estado.oradorId) saltados.current = [estado.oradorId]
         }}

@@ -5,6 +5,7 @@ import {
   empezarDeCero,
   iniciarCrono,
   iniciarPartida,
+  lanzarRobo,
   marcarAusente,
   renombrar,
   saltarTurno,
@@ -35,6 +36,8 @@ export default function Controles({
   fichas,
   onSiguiente,
   conNiveles,
+  onEmergencia,
+  onVerRespaldo,
   onSaltar,
   fallo,
   setFallo,
@@ -54,7 +57,9 @@ export default function Controles({
       if (e?.name === 'YaHecho') return
       console.error(e)
       registrar(db, 'pantalla', 'error', `control · ${textoError(e)}`, { estado })
-      setFallo(e?.message?.startsWith('Hay fichas') ? e.message : 'No se pudo completar. Revisa la conexión e intenta otra vez.')
+      // Errores propios del juego (sin código de Firebase) se muestran tal cual.
+      setFallo(e?.message && !e?.code ? e.message : 'No se pudo completar. Revisa la conexión e intenta otra vez.')
+      if (['resource-exhausted', 'unavailable', 'deadline-exceeded'].includes(e?.code)) onEmergencia?.(e.code)
     } finally {
       setOcupado(false)
     }
@@ -111,6 +116,33 @@ export default function Controles({
             ⏭ Saltar turno
           </button>
         )}
+        {fase === FASES.RESULTADO && (
+          <button
+            className="ctl"
+            disabled={ocupado}
+            title="Alguien de la mitad de abajo le roba un tercio de sus puntos a alguien del podio"
+            onClick={hacer(async () => {
+              if (confirm('¿Lanzar un evento sorpresa (robo de puntos)?')) await lanzarRobo(db, { personas, conectados })
+            })}
+          >
+            ⚡ Sorpresa
+          </button>
+        )}
+        {estado.iniciada && fase !== FASES.FINAL && (
+          <button
+            className="ctl"
+            disabled={ocupado}
+            title="Termina ya y muestra el podio con los puntos actuales"
+            onClick={hacer(async () => {
+              const enCurso = ![FASES.SALA, FASES.RESULTADO].includes(fase)
+              const aviso = enCurso ? '\n\nEl turno en curso no se cuenta (no ha cerrado la votación).' : ''
+              if (confirm(`¿Terminar la actividad ahora y mostrar el podio con los puntos actuales?${aviso}`))
+                await terminarPartida(db, estado, personas)
+            })}
+          >
+            🏁 Terminar
+          </button>
+        )}
         <button className="ctl" onClick={() => setCajon((x) => !x)}>
           ☰
         </button>
@@ -137,6 +169,9 @@ export default function Controles({
                 🏁 Terminar y mostrar podio
               </button>
             )}
+            <button className="ctl" onClick={onVerRespaldo} title="Marcador guardado en este computador, sin Firebase">
+              🛟 Ver resultados guardados (plan B)
+            </button>
             <button
               className="ctl peligro"
               onClick={hacer(async () => {

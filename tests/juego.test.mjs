@@ -16,6 +16,7 @@ import {
   nombreUnico,
   premios,
   motivosTurno,
+  robo,
 } from '../src/lib/juego.js'
 import { PUNTOS } from '../src/lib/config.js'
 
@@ -322,4 +323,27 @@ test('motivos del turno: frases con los puntos de cada quien', () => {
   assert.equal(o[0], 'Primera impresión +1')
   assert.ok(o.includes('Base de orador +5'))
   assert.ok(o.some((x) => x.startsWith('Persuasión 67%')))
+})
+
+test('Abogado del Diablo: mejor nota yendo contra la evidencia, aunque no llegue a 4', () => {
+  const t = { oradorNombre: 'Leo', ficha: 'F9', reto: 'ataca', revelacion: { nivel: 'Respaldada' },
+    resultado: { base: 0, contracorriente: false, notaPromedio: 3.1, fuegos: 0, votantes: 4, pctSi: 50, pctConoce: 50, predijeron: 4, aciertos: 2 } }
+  const u = { ...t, oradorNombre: 'Eva', reto: 'defiende', revelacion: { nivel: 'Respaldada' }, resultado: { ...t.resultado, notaPromedio: 5 } }
+  assert.equal(premios([t, u], {}, {}).insignias.abogado.nombre, 'Leo')
+})
+
+test('robo: el ladrón le quita un tercio a alguien del podio; los totales se conservan', () => {
+  const m = { a: { total: 30 }, b: { total: 20 }, c: { total: 9 }, d: { total: 3 }, e: { total: 0 } }
+  const r = robo(m, ['a', 'b', 'c', 'd', 'e'], () => 0)
+  assert.equal(r.victima, 'a')
+  assert.equal(r.puntos, 10)
+  assert.notEqual(r.ladron, 'a')
+  assert.ok(['c', 'd', 'e'].includes(r.ladron))
+  assert.equal(r.marcador.a.total, 20)
+  assert.equal(r.marcador.a.robado, 10)
+  assert.equal(r.marcador[r.ladron].robos, 10)
+  const suma = (x) => Object.values(x).reduce((s, f) => s + f.total, 0)
+  assert.equal(suma(r.marcador), suma(m))
+  assert.equal(m.a.total, 30) // no muta el original
+  assert.equal(robo({ a: { total: 2 } }, ['a', 'b']), null)
 })

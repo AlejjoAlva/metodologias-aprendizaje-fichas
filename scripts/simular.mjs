@@ -28,6 +28,7 @@ import {
   leerNiveles,
   reemplazarFichas,
   terminarPartida,
+  lanzarRobo,
 } from '../src/lib/acciones-pantalla.js'
 import {
   elegirReto,
@@ -327,6 +328,12 @@ async function main() {
     console.log(`  marcador acumulado: ${total} pts repartidos`)
   }
 
+  ctx = await contexto(host)
+  const antesRobo = Object.values(ctx.estado.marcador).reduce((t, m) => t + m.total, 0)
+  const r = await lanzarRobo(host.db, ctx)
+  const tras = await leerEstado(host.db)
+  ok(r && Object.values(tras.marcador).reduce((t, m) => t + m.total, 0) === antesRobo && tras.sorpresa?.puntos === r.puntos,
+    `evento sorpresa: ${r?.ladronNombre} le robó ${r?.puntos} a ${r?.victimaNombre} (los puntos totales se conservan)`)
   ctx = await contexto(host)
   await terminarPartida(host.db, ctx.estado, ctx.personas)
   const fin = await leerEstado(host.db)

@@ -30,6 +30,8 @@ export default function Podio({ estado, fichas }) {
               <span className="escalon-desglose">
                 {m[t.id]?.participacion ?? 0} participación · {m[t.id]?.prediccion ?? 0} predicción de evidencia ·{' '}
                 {m[t.id]?.argumento ?? 0} argumento · {m[t.id]?.rachas ?? 0} rachas
+                {m[t.id]?.robos ? ` · +${m[t.id].robos} robados` : ''}
+                {m[t.id]?.robado ? ` · −${m[t.id].robado} le robaron` : ''}
               </span>
               <span className="escalon-base">{t.posicion}</span>
             </div>

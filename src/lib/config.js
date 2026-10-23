@@ -16,6 +16,7 @@ export const PUNTOS = {
   umbralPersuadibles: 30, // % de votantes del turno
   contracorriente: 3,
   contracorrienteNota: 4, // nota promedio mínima para contracorriente
+  roboCada: 3, // evento sorpresa automático cada tantos turnos (0 = solo con el botón ⚡)
 }
 
 // Duraciones en segundos.

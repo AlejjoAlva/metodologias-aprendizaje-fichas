@@ -23,6 +23,7 @@ const CAMPOS = [
       ['persuasionFija', 'Persuasión fija bajo el umbral'],
       ['contracorriente', 'Contracorriente'],
       ['contracorrienteNota', 'Contracorriente: nota mínima'],
+      ['roboCada', 'Evento sorpresa cada (turnos, 0 = manual)'],
     ],
   ],
   [

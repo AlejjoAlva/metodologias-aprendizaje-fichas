@@ -26,6 +26,7 @@ import {
   premios,
   ranking,
   repartir,
+  robo,
   sortear,
   sortearReto,
   sortearSinElegir,
@@ -593,4 +594,32 @@ export async function reemplazarFichas(db, estado, nuevas, viejas) {
 export async function excluirFicha(db, ficha, excluir) {
   await updateDoc(doc(db, 'fichas', String(ficha.n)), { estado: excluir ? 'excluida' : 'libre' })
   log(db, excluir ? 'excluir_ficha' : 'incluir_ficha', ficha.nombre ?? `#${ficha.n}`)
+}
+
+/**
+ * Evento sorpresa entre turnos: alguien de la mitad de abajo le roba un tercio de sus puntos a
+ * alguien del podio. Se lee el estado fresco dentro de la transacción para no pisar puntos.
+ * Devuelve el robo o null si todavía no hay a quién robar.
+ */
+export async function lanzarRobo(db, { personas, conectados, rnd = Math.random }) {
+  const nombre = Object.fromEntries(personas.map((p) => [p.id, p.nombre]))
+  const presentes = personas.filter((p) => !p.ausente && conectados.has(p.id)).map((p) => p.id)
+  let hecho = null
+  let fresco = null
+  await runTransaction(db, async (tx) => {
+    const e = (await tx.get(doc(db, ESTADO))).data()
+    fresco = e
+    if (!e?.iniciada || ![FASES.RESULTADO, FASES.SALA].includes(e.fase)) throw new Error('El evento sorpresa se lanza entre turnos (en el Resultado).')
+    const r = robo(e.marcador || {}, presentes, rnd)
+    if (!r) throw new Error('Todavía nadie tiene puntos suficientes para robar.')
+    hecho = { ...r, ladronNombre: nombre[r.ladron], victimaNombre: nombre[r.victima] }
+    tx.update(doc(db, ESTADO), {
+      marcador: r.marcador,
+      top: topConNombres(r.marcador, nombre, 10),
+      sorpresa: { tipo: 'robo', ladron: r.ladron, victima: r.victima, ladronNombre: hecho.ladronNombre, victimaNombre: hecho.victimaNombre, puntos: r.puntos, t: Date.now() },
+      eventos: evento(e, `⚡ ${hecho.ladronNombre} le robó ${r.puntos} ${r.puntos === 1 ? 'punto' : 'puntos'} a ${hecho.victimaNombre}`),
+    })
+  })
+  log(db, 'robo', `${hecho.ladronNombre} le robó ${hecho.puntos} a ${hecho.victimaNombre}`, fresco)
+  return hecho
 }

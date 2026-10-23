@@ -293,8 +293,10 @@ export function premios(turnos, marcador, nombre) {
     jugados.filter((t) => r(t).base > 0),
     (t) => r(t).pctPersuadido * 1000 + r(t).persuadidos,
   )
+  // Abogado del Diablo: le tocó ir contra la evidencia (Ataca una Respaldada o Defiende una Poco
+  // respaldada) y fue quien mejor nota sacó haciéndolo. Los +3 de contracorriente piden nota ≥ 4.
   const abogado = mejor(
-    jugados.filter((t) => r(t).contracorriente),
+    jugados.filter((t) => r(t).contracorriente || esContracorriente(t.reto, t.revelacion?.nivel)),
     (t) => r(t).notaPromedio,
   )
   const aplaudido = mejor(
@@ -366,4 +368,30 @@ export function motivosTurno(id, { oradorId, impresiones, votos, sentimientos, c
   if (votoCompleto(votos?.[id])) m.push(`Voto final +${P.voto}`)
   if (rachaNueva) m.push(`Racha de ${P.rachaCada} turnos +${P.racha}`)
   return m
+}
+
+/**
+ * Evento sorpresa: un ladrón le quita la tercera parte de sus puntos a alguien del podio.
+ * presentes: ids que pueden participar. Devuelve { ladron, victima, puntos, marcador } o null.
+ */
+export function robo(marcador, presentes, rnd = Math.random) {
+  const filas = ranking(Object.fromEntries(Object.entries(marcador).filter(([id]) => presentes.includes(id))))
+  const victimas = filas.filter((f) => f.total >= 3).slice(0, 3)
+  if (!victimas.length) return null
+  const v = victimas[Math.min(victimas.length - 1, Math.floor(rnd() * victimas.length))]
+  // El ladrón sale de la mitad de abajo (si se puede), nunca es la víctima.
+  const otros = filas.filter((f) => f.personaId !== v.personaId)
+  const abajo = otros.slice(Math.floor(otros.length / 2))
+  const pool = abajo.length ? abajo : otros
+  const l = pool[Math.min(pool.length - 1, Math.floor(rnd() * pool.length))] ?? presentes.find((id) => id !== v.personaId)
+  const ladron = typeof l === 'string' ? l : l?.personaId
+  if (!ladron) return null
+  const puntos = Math.floor(v.total / 3)
+  const m = Object.fromEntries(Object.entries(marcador).map(([id, x]) => [id, { ...x }]))
+  m[ladron] ??= { total: 0, participacion: 0, prediccion: 0, argumento: 0, rachas: 0, racha: 0, aciertos: 0 }
+  m[v.personaId].total -= puntos
+  m[v.personaId].robado = (m[v.personaId].robado || 0) + puntos
+  m[ladron].total += puntos
+  m[ladron].robos = (m[ladron].robos || 0) + puntos
+  return { ladron, victima: v.personaId, puntos, marcador: m }
 }
