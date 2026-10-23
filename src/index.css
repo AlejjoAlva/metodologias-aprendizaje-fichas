@@ -1276,8 +1276,10 @@ button {
 
 .ctl-barra {
   position: fixed;
-  right: 1.4vw;
-  bottom: 9vh;
+  left: 35vw;
+  top: 2.4vh;
+  max-width: 40vw;
+  flex-wrap: wrap;
   display: flex;
   gap: 0.5vw;
   align-items: center;
@@ -1328,8 +1330,8 @@ button {
 
 .ctl-mostrar {
   position: fixed;
-  right: 0.6vw;
-  bottom: 9vh;
+  left: 35vw;
+  top: 2.4vh;
   opacity: 0.25;
   border: 0;
   background: none;
