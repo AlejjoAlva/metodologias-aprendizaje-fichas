@@ -23,21 +23,27 @@ las lecciones de La Bolsa (`~/Proyectos/bolsa-semillero`) aplicadas desde el ini
 - Controles del anfitrión: barra discreta (siguiente fase, iniciar/reiniciar cronómetro, saltar
   turno, ocultar controles) y cajón mínimo (iniciar partida, anular turno, marcar ausente,
   renombrar, terminar y mostrar podio, empezar de cero).
+- **Presencia automática** (quién está conectado) con Realtime Database, sin costo en escrituras de
+  Firestore (ver §2).
 
 **Queda para después**: réplica, ronda 2, insignias, rankings de fichas, carga de CSV desde el
 panel, edición de puntos y umbrales desde el panel, exportación, pestaña Registro del celular,
-pausa del cronómetro, presencia automática.
-
-**Simplificación consciente — presencia**: Firestore no detecta desconexiones sin escrituras
-periódicas (≈5.000 escrituras en el evento). En la versión mínima "presente" = inscrito y no
-marcado ausente por el anfitrión. Si la ruleta saca a alguien que no está, el anfitrión salta el
-turno (caso ya previsto en el documento).
+pausa del cronómetro.
 
 ## 2. Arquitectura
 
 Vite + React + Firestore + Firebase Auth + Hosting, plan **Spark**, proyecto nuevo bajo
 `la cuenta institucional del semillero`, repo privado `uamffcebog123/metodologias-aprendizaje-fichas`.
 Sin Cloud Functions (no hay Blaze).
+
+**Presencia con Realtime Database (RTDB)**: Firestore no detecta desconexiones sin escrituras
+periódicas (≈5.000 en el evento). RTDB sí, de forma nativa: cada celular escribe
+`presencia/{uid} = true` al conectar y registra `onDisconnect().remove()`; el servidor de Firebase
+borra la marca cuando se cae la conexión (cierre de pestaña, pérdida de red, celular bloqueado
+durante un rato). RTDB en Spark **no cobra por operación** (límites: 100 conexiones simultáneas,
+1 GB guardado, 10 GB/mes de descarga), así que cuesta cero de la cuota de Firestore. Solo la
+pantalla escucha `presencia`. La ruleta de personas sortea entre inscritos **conectados**, no
+ausentes y que no han pasado. El anfitrión puede seguir marcando ausente a mano.
 
 Dos rutas:
 - **`/`** — celular. Usuario anónimo de Firebase.
@@ -99,9 +105,11 @@ carga corta (25 clientes, ~3 turnos), medida luego en Cloud Monitoring.
    doble voto, voto ajeno, escritura de estado por un celular — todo debe fallar.
 3. Simulación de partida completa contra el emulador con 25 celulares.
 4. Una prueba de carga corta contra producción y lectura del consumo real.
-5. Revisión visual tuya en la pantalla grande antes del evento.
+5. Presencia: cerrar la pestaña de un celular simulado y ver que sale de la ruleta.
+6. Revisión visual tuya en la pantalla grande antes del evento.
 
 ## 7. Entregables antes de las 2 p.m.
 
 Desplegado, base limpia, QR listo, credenciales del anfitrión entregadas, runbook corto (qué hacer
-si algo falla) y README.
+si algo falla), README y **guía de uso** para el anfitrión (cómo funciona, cómo explicarlo a la sala
+y cómo operar cada fase).
