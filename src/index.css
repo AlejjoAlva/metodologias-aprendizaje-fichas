@@ -1909,3 +1909,39 @@ button {
   line-height: 1.35;
   max-height: 34vh;
 }
+
+.bitacora {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 40vh;
+  overflow-y: auto;
+  font-size: 1.5vh;
+}
+
+.bitacora li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 0.6vw;
+  padding: 0.4vh 0;
+  border-bottom: 1px solid var(--papel-2);
+}
+
+.bitacora li.grave .bt-tipo {
+  color: var(--no);
+}
+
+.bt-hora {
+  font-family: var(--mono);
+  color: var(--tinta-2);
+}
+
+.bt-tipo {
+  font-weight: 600;
+}
+
+.bt-detalle {
+  grid-column: 2;
+  color: var(--tinta-2);
+  overflow-wrap: anywhere;
+}

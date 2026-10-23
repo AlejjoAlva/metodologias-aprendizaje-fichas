@@ -12,6 +12,7 @@ import {
 import { elegirReto, enviarSentimiento, responder, yaRespondi } from '../lib/acciones-celular'
 import Crono from './Crono'
 import { separarFuentes, traeEtiqueta } from '../lib/texto'
+import { registrar, textoError } from '../lib/bitacora'
 
 const RETO_TXT = { aplicala: 'Aplícala', defiende: 'Defiende', ataca: 'Ataca', elige: 'Tú eliges' }
 
@@ -223,6 +224,12 @@ function Formulario({ uid, persona, estado, tipo }) {
       setEnvio('enviada')
     } catch (err) {
       console.warn(err)
+      registrar(db, 'celular', 'error_respuesta', `${tipo} · quedaban ${restante?.toFixed(1)} s · ${textoError(err)}`, {
+        uid,
+        personaId: persona.id,
+        nombre: persona.nombre,
+        estado,
+      })
       setEnvio(cerrado || (restante != null && restante < 1.5) ? 'tarde' : 'error')
     }
   }

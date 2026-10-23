@@ -61,7 +61,12 @@ service cloud.firestore {
       allow create: if autenticado() && uid == request.auth.uid
         && request.resource.data.keys().hasOnly(['nombre', 'codigo', 'creado'])
         && request.resource.data.codigo is string;
-      allow update, delete: if anfitrion();
+      // Si lo rechazaron, puede intentarlo otra vez (el anfitrión lo vuelve a revisar).
+      allow update: if anfitrion() || (autenticado() && uid == request.auth.uid
+        && resource.data.estado == 'rechazado'
+        && request.resource.data.keys().hasOnly(['nombre', 'codigo', 'creado'])
+        && request.resource.data.codigo is string);
+      allow delete: if anfitrion();
     }
 
     // Una respuesta por persona, turno y fase. Solo se crea, en la fase vigente y antes de que
@@ -84,7 +89,18 @@ service cloud.firestore {
         && request.time < estado().cronoInicio + duration.value(estado().duracion + 1, 's');
     }
 
-    // Barra y reacciones: cada celular sobrescribe solo el suyo. Solo lo escucha la pantalla.
+    // Bitácora de diagnóstico: cualquiera con sesión agrega filas cortas; solo el anfitrión las lee.
+    match /bitacora/{id} {
+      allow read: if anfitrion();
+      allow create: if autenticado()
+        && request.resource.data.keys().hasOnly(['t', 'quien', 'tipo', 'detalle', 'uid', 'personaId', 'nombre', 'generacion', 'fase', 'turno'])
+        && request.resource.data.quien in ['pantalla', 'celular', 'script']
+        && request.resource.data.tipo is string && request.resource.data.tipo.size() <= 40
+        && request.resource.data.detalle is string && request.resource.data.detalle.size() <= 400
+        && (request.resource.data.uid == null || request.resource.data.uid == request.auth.uid);
+    }
+
+    // Reacciones: cada celular sobrescribe solo el suyo. Solo lo escucha la pantalla.
     match /sentimiento/{uid} {
       allow read: if anfitrion();
       allow write: if autenticado() && uid == request.auth.uid;

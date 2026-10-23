@@ -27,6 +27,7 @@ import {
   terminarPartida,
 } from '../lib/acciones-pantalla'
 import { FASES } from '../lib/juego'
+import { registrar, textoError } from '../lib/bitacora'
 import { leerFichas } from '../lib/csv'
 import fichasCsv from '../datos/fichas.csv?raw'
 import CentroPantalla from '../componentes/CentroPantalla'
@@ -62,6 +63,7 @@ function Login({ onListo }) {
           try {
             if (auth.currentUser?.isAnonymous) await signOut(auth)
             const c = await signInWithEmailAndPassword(auth, correo.trim(), clave)
+            registrar(db, 'pantalla', 'login', navigator.userAgent.slice(0, 120))
             onListo(c.user)
           } catch {
             setError('Correo o contraseña incorrectos.')
@@ -113,8 +115,12 @@ function Tablero() {
     if (hecho.current.has(clave)) return
     hecho.current.add(clave)
     fn().catch((e) => {
-      if (e?.name === 'YaHecho') return // otra pantalla abierta ya hizo este paso
+      if (e?.name === 'YaHecho') {
+        registrar(db, 'pantalla', 'ya_hecho', `${clave}: otra pantalla abierta se adelantó`, { estado })
+        return
+      }
       console.error(clave, e)
+      registrar(db, 'pantalla', 'error', `${clave} · ${textoError(e)}`, { estado })
       hecho.current.delete(clave)
       setFallo(`No se pudo completar (${clave.split(':')[0]}). Revisa la conexión.`)
     })
@@ -173,7 +179,7 @@ function Tablero() {
 
   // Recuperaciones desde otro navegador.
   useEffect(() => {
-    for (const r of reclamos) unaVez(`reclamo:${r.id}`, () => resolverReclamo(db, { uid: r.id, ...r }, personas))
+    for (const r of reclamos) unaVez(`reclamo:${r.id}:${r.creado?.seconds ?? ''}`, () => resolverReclamo(db, { uid: r.id, ...r }, personas, conectados))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reclamos.length, personas.length])
 
@@ -199,6 +205,7 @@ function Tablero() {
     } catch (e) {
       if (e?.name === 'YaHecho') return
       console.error(e)
+      registrar(db, 'pantalla', 'error', `siguiente · ${textoError(e)}`, { estado })
       setFallo('No se pudo avanzar. Revisa la conexión e intenta otra vez.')
     }
   }

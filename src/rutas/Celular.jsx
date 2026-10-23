@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { collection, doc, getDocs, onSnapshot, query, where } from 'firebase/firestore'
 import { asegurarAnonimo, db, rtdb } from '../lib/firebase'
 import { useEstado } from '../lib/datos'
 import { buscarPersona, inscribirse, marcarPresencia, pedirRecuperacion } from '../lib/acciones-celular'
 import { ranking } from '../lib/juego'
 import FaseCelular from '../componentes/FaseCelular'
+import { registrar, textoError } from '../lib/bitacora'
 import MisFichas from '../componentes/MisFichas'
 
 const GUARDADO = 'fichas_persona'
@@ -33,24 +34,68 @@ export default function Celular() {
   const { estado, error } = useEstado()
   const [persona, setPersona] = useState(undefined) // undefined = buscando, null = no inscrito
   const [salaOk, setSalaOk] = useState(false)
+  const [partidaNueva, setPartidaNueva] = useState(false)
+  const anterior = useRef(null) // { generacion, nombre } de la última vez que estuvo inscrito
 
   useEffect(() => {
-    asegurarAnonimo().then((u) => setUid(u.uid), () => setErrorAuth(true))
+    asegurarAnonimo().then(
+      (u) => setUid(u.uid),
+      (e) => {
+        setErrorAuth(true)
+        registrar(db, 'celular', 'error_sesion', textoError(e))
+      },
+    )
   }, [])
 
-  // ¿Este navegador ya está inscrito en la partida vigente?
+  // Conexión del celular: queda en la bitácora cuando se pierde y cuando vuelve.
+  useEffect(() => {
+    const ctx = () => ({ uid, personaId: persona?.id, nombre: persona?.nombre })
+    const fuera = () => registrar(db, 'celular', 'sin_internet', navigator.userAgent.slice(0, 120), ctx())
+    const dentro = () => registrar(db, 'celular', 'volvio_internet', '', ctx())
+    window.addEventListener('offline', fuera)
+    window.addEventListener('online', dentro)
+    return () => {
+      window.removeEventListener('offline', fuera)
+      window.removeEventListener('online', dentro)
+    }
+  }, [uid, persona])
+
+  // ¿Este navegador ya está inscrito en la partida vigente? (vuelve a entrar solo, sin código)
   const generacion = estado?.generacion
   useEffect(() => {
     if (!uid || generacion == null) return
     let vivo = true
     setPersona(undefined)
     buscarPersona(db, uid, leer(GUARDADO), generacion)
-      .then((p) => vivo && setPersona(p))
-      .catch(() => vivo && setPersona(null))
+      .then((p) => {
+        if (!vivo) return
+        const antes = anterior.current
+        if (p) registrar(db, 'celular', 'reingreso', 'Mismo navegador: entra solo', { uid, personaId: p.id, nombre: p.nombre, estado })
+        else if (antes && antes.generacion !== generacion) {
+          setPartidaNueva(true)
+          registrar(db, 'celular', 'nueva_partida', `Estaba como ${antes.nombre} en la generación ${antes.generacion}; el anfitrión empezó de cero`, { uid, estado })
+        }
+        setPersona(p)
+      })
+      .catch((e) => {
+        if (!vivo) return
+        registrar(db, 'celular', 'error_busqueda', textoError(e), { uid, estado })
+        setPersona(null)
+      })
     return () => {
       vivo = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uid, generacion])
+
+  useEffect(() => {
+    if (persona) anterior.current = { generacion: estado?.generacion, nombre: persona.nombre }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persona])
+
+  useEffect(() => {
+    if (error) registrar(db, 'celular', 'error_estado', textoError(error), { uid })
+  }, [error, uid])
 
   // Código de sala: viene en el QR (?sala=XXXX) o se escribe a mano una vez.
   useEffect(() => {
@@ -92,6 +137,7 @@ export default function Celular() {
       <Registro
         uid={uid}
         estado={estado}
+        partidaNueva={partidaNueva}
         onListo={(p, codigo) => {
           guardar(GUARDADO, p.id)
           if (codigo) guardar(GUARDADO_CODIGO, codigo)
@@ -151,7 +197,7 @@ function CodigoSala({ estado, onOk }) {
   )
 }
 
-function Registro({ uid, estado, onListo }) {
+function Registro({ uid, estado, onListo, partidaNueva }) {
   const [modo, setModo] = useState('nuevo') // nuevo | recuperar | codigo
   const [nombre, setNombre] = useState('')
   const [codigo, setCodigo] = useState('')
@@ -169,7 +215,11 @@ function Registro({ uid, estado, onListo }) {
         if (p) onListo(p, codigo)
       } else if (r?.estado === 'rechazado') {
         setModo('recuperar')
-        setError('El nombre o el código no coinciden. Revisa e intenta otra vez, o pide ayuda al anfitrión.')
+        setError(
+          r.motivo === 'conectado'
+            ? 'Ese nombre sigue conectado en otro celular. Ciérralo y espera un minuto, o escribe tu código de 4 dígitos.'
+            : 'El nombre o el código no coinciden. Revisa e intenta otra vez, o pide ayuda al anfitrión.',
+        )
       }
     })
   }, [modo, uid, estado.generacion, codigo, onListo])
@@ -200,15 +250,22 @@ function Registro({ uid, estado, onListo }) {
             setError(null)
             try {
               const r = await inscribirse(db, uid, estado, nombre.slice(0, 30))
+              registrar(db, 'celular', 'entrada', navigator.userAgent.slice(0, 120), { uid, personaId: r.personaId, nombre: r.nombre, estado })
               setHecho({ p: { id: r.personaId, nombre: r.nombre, uids: [uid] }, codigo: r.codigo })
             } catch (err) {
               console.error(err)
+              registrar(db, 'celular', 'error_inscripcion', textoError(err), { uid, estado })
               setError('No se pudo inscribir. Revisa tu conexión e intenta de nuevo.')
             } finally {
               setEnviando(false)
             }
           }}
         >
+          {partidaNueva && (
+            <p className="aviso">
+              El anfitrión empezó una partida nueva. Escribe tu nombre otra vez para entrar (los puntos empiezan de cero).
+            </p>
+          )}
           <h2>¿Cómo te llamas?</h2>
           <input
             className="campo"
@@ -223,7 +280,7 @@ function Registro({ uid, estado, onListo }) {
             {enviando ? 'Entrando…' : 'Entrar al juego'}
           </button>
           <button type="button" className="boton enlace" onClick={() => setModo('recuperar')}>
-            Ya me había inscrito (tengo mi código)
+            Ya me había inscrito (volver a entrar)
           </button>
         </form>
       )}
@@ -235,14 +292,18 @@ function Registro({ uid, estado, onListo }) {
             setError(null)
             try {
               await pedirRecuperacion(db, uid, nombre, codigo)
+              registrar(db, 'celular', 'pide_recuperacion', `«${nombre.trim()}» ${codigo ? 'con código' : 'sin código'}`, { uid, estado })
               setModo('esperando')
             } catch {
-              setError('Ya hay un pedido desde este navegador. Pide ayuda al anfitrión.')
+              setError('No se pudo enviar. Revisa tu conexión e intenta otra vez.')
             }
           }}
         >
           <h2>Volver a entrar</h2>
-          <p className="ayuda">Escribe tu nombre tal como aparece en la pantalla y tu código de 4 dígitos.</p>
+          <p className="ayuda">
+            Escribe tu nombre tal como aparece en la pantalla. El código de 4 dígitos solo hace falta si tu nombre sigue
+            conectado en otro celular.
+          </p>
           <input className="campo" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Tu nombre" />
           <input
             className="campo campo-codigo"
@@ -250,10 +311,10 @@ function Registro({ uid, estado, onListo }) {
             onChange={(e) => setCodigo(e.target.value.replace(/\D/g, ''))}
             inputMode="numeric"
             maxLength={4}
-            placeholder="0000"
+            placeholder="Código (opcional)"
           />
           {error && <p className="aviso error">{error}</p>}
-          <button className="boton principal" disabled={modo === 'esperando' || codigo.length !== 4 || !nombre.trim()}>
+          <button className="boton principal" disabled={modo === 'esperando' || (codigo.length > 0 && codigo.length !== 4) || !nombre.trim()}>
             {modo === 'esperando' ? 'Verificando…' : 'Recuperar'}
           </button>
           <button type="button" className="boton enlace" onClick={() => setModo('nuevo')}>

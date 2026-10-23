@@ -38,6 +38,9 @@ import {
   responder,
 } from '../src/lib/acciones-celular.js'
 import { FASES, calcularTurno } from '../src/lib/juego.js'
+import { origen } from '../src/lib/bitacora.js'
+
+origen.quien = 'script'
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, '').split('=')))
 const PROD = 'prod' in args

@@ -165,3 +165,21 @@ test('una persona de una partida anterior no puede responder', async () => {
   const r = resp({ uid: 'vieja', personaId: 'vieja', generacion: 1 })
   await assertFails(setDoc(doc(celular('vieja'), 'respuestas', idResp(r)), r))
 })
+
+test('recuperación: un pedido rechazado se puede reintentar; uno pendiente no se pisa', async () => {
+  const pedido = { nombre: 'Ana', codigo: '', creado: serverTimestamp() }
+  await assertSucceeds(setDoc(doc(celular('nuevo'), 'reclamos/nuevo'), pedido))
+  await assertFails(setDoc(doc(celular('nuevo'), 'reclamos/nuevo'), pedido))
+  await assertSucceeds(updateDoc(doc(pantalla(), 'reclamos/nuevo'), { estado: 'rechazado', motivo: 'conectado' }))
+  await assertSucceeds(setDoc(doc(celular('nuevo'), 'reclamos/nuevo'), { ...pedido, codigo: '1234' }))
+  await assertFails(setDoc(doc(celular('otro'), 'reclamos/nuevo'), pedido))
+})
+
+test('bitácora: cualquiera con sesión escribe filas cortas a su nombre; solo el anfitrión lee', async () => {
+  const fila = { t: serverTimestamp(), quien: 'celular', tipo: 'entrada', detalle: 'x', uid: 'ana', personaId: 'ana', nombre: 'Ana', generacion: 0, fase: 'sala', turno: 0 }
+  await assertSucceeds(setDoc(doc(celular('ana'), 'bitacora/a1'), fila))
+  await assertFails(setDoc(doc(celular('ana'), 'bitacora/a2'), { ...fila, uid: 'luis' }))
+  await assertFails(setDoc(doc(celular('ana'), 'bitacora/a3'), { ...fila, detalle: 'x'.repeat(401) }))
+  await assertFails(getDoc(doc(celular('ana'), 'bitacora/a1')))
+  await assertSucceeds(getDoc(doc(pantalla(), 'bitacora/a1')))
+})

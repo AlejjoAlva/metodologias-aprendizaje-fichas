@@ -14,6 +14,9 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { ajustesDe } from './config.js'
+import { origen, registrar } from './bitacora.js'
+
+const log = (db, tipo, detalle, estado) => registrar(db, origen.quien, tipo, detalle, { estado })
 import {
   FASES,
   aplicarTurno,
@@ -164,6 +167,7 @@ export async function iniciarPartida(db, estado, { fichas, personas, conectados,
     eventos: evento(estado, `Empieza la partida: ${Object.keys(reparto).length} personas con fichas`),
   })
   await batch.commit()
+  log(db, 'iniciar', `${presentes.length} presentes, ${Object.keys(reparto).length} con fichas, ${libres.length} fichas libres`, estado)
   return reparto
 }
 
@@ -174,11 +178,15 @@ const infoReparto = (fichas, niveles) =>
 export async function asignarFichas(db, estado, persona, fichas, niveles = {}, rnd = Math.random) {
   const libres = fichas.filter((f) => f.estado === 'libre').map((f) => f.n)
   const r = repartir(libres, [persona.id], rnd, infoReparto(fichas, niveles))[persona.id]
-  if (!r) return []
+  if (!r) {
+    log(db, 'sin_fichas', `No alcanzan fichas libres para ${persona.nombre}`, estado)
+    return []
+  }
   const batch = writeBatch(db)
   for (const n of r) batch.update(doc(db, 'fichas', String(n)), { dueno: persona.id, estado: 'repartida' })
   batch.update(doc(db, ESTADO), { repartoVersion: (estado.repartoVersion || 0) + 1 })
   await batch.commit()
+  log(db, 'llego_tarde', `${persona.nombre} recibe ${r.length} fichas`, estado)
   return r
 }
 
@@ -187,7 +195,10 @@ export async function girarPersona(db, estado, { personas, conectados, fichas, e
   const conFichas = new Set(fichas.filter((f) => f.dueno && f.estado === 'repartida').map((f) => f.dueno))
   const candidatos = candidatosRuleta(personas, conectados, conFichas).filter((id) => !excluir.includes(id))
   const elegido = sortear(candidatos, rnd)
-  if (!elegido) return false
+  if (!elegido) {
+    log(db, 'sin_candidatos', `Nadie más puede pasar (${personas.length} inscritos, ${conectados.size} conectados)`, estado)
+    return false
+  }
   const p = personas.find((x) => x.id === elegido)
   const candidatas = fichas.filter((f) => f.dueno === elegido && f.estado === 'repartida').map((f) => f.n)
   await enFase(db, estado, (tx) =>
@@ -443,12 +454,19 @@ export async function cerrarTurno(db, estado, { personas, conectados }) {
       ),
     })
   })
+  log(
+    db,
+    'cierre',
+    `${estado.oradorNombre} · «${estado.ficha?.nombre}» · ${reto} · ${revelacion.nivel} · ${calculo.votantes} votos, ${calculo.aciertos.length} aciertos, orador +${resultado.puntosOrador}`,
+    estado,
+  )
   return { calculo, resultado, marcador }
 }
 
 /** Guarda los ajustes editables (puntos, pesos del reto, duraciones). */
 export async function guardarAjustes(db, ajustes) {
   await updateDoc(doc(db, ESTADO), { ajustes })
+  log(db, 'ajustes', JSON.stringify(ajustes).slice(0, 400))
 }
 
 export function topConNombres(marcador, nombre, n = 10) {
@@ -472,6 +490,7 @@ export async function saltarTurno(db, estado) {
       eventos: evento(estado, `⏭️ Se saltó el turno de ${estado.oradorNombre}`),
     })
   })
+  log(db, 'saltar', `Turno de ${estado.oradorNombre}`, estado)
 }
 
 export async function terminarPartida(db, estado, personas) {
@@ -488,29 +507,51 @@ export async function terminarPartida(db, estado, personas) {
     ),
     eventos: evento(estado, '🏁 Fin de la partida'),
   })
+  log(db, 'final', `${snap.size} turnos jugados`, estado)
 }
 
 export async function marcarAusente(db, persona, ausente) {
   await updateDoc(doc(db, 'personas', persona.id), { ausente })
+  log(db, ausente ? 'ausente' : 'presente', persona.nombre)
 }
 
 export async function renombrar(db, persona, nombre) {
   await updateDoc(doc(db, 'personas', persona.id), { nombre: nombre.trim().slice(0, 30) })
+  log(db, 'renombrar', `${persona.nombre} → ${nombre.trim().slice(0, 30)}`)
 }
 
-/** Recuperación desde otro navegador: nombre + código de 4 dígitos. */
-export async function resolverReclamo(db, reclamo, personas) {
-  const nombre = (reclamo.nombre || '').trim().toLowerCase()
-  const p = personas.find((x) => x.nombre.trim().toLowerCase() === nombre)
+const normal = (s) =>
+  (s || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+
+/**
+ * Recuperación desde otro navegador o celular. Con nombre + código, siempre. Solo con el nombre,
+ * si esa persona no está conectada ahora mismo (así nadie le quita el lugar a quien sigue jugando).
+ */
+export async function resolverReclamo(db, reclamo, personas, conectados = new Set()) {
+  const p = personas.find((x) => normal(x.nombre) === normal(reclamo.nombre))
   let ok = false
-  if (p) {
+  let motivo = 'no hay nadie con ese nombre en esta partida'
+  if (p && reclamo.codigo) {
     const c = await getDoc(doc(db, 'codigos', p.id))
     ok = c.exists() && c.data().codigo === reclamo.codigo
+    motivo = ok ? 'nombre y código' : 'código equivocado'
+  } else if (p) {
+    ok = !conectados.has(p.id)
+    motivo = ok ? 'solo nombre (estaba desconectado)' : 'solo nombre, pero sigue conectado en otro celular'
   }
   const batch = writeBatch(db)
   if (ok) batch.update(doc(db, 'personas', p.id), { uids: arrayUnion(reclamo.uid) })
-  batch.update(doc(db, 'reclamos', reclamo.uid), ok ? { estado: 'ok', personaId: p.id } : { estado: 'rechazado' })
+  batch.update(
+    doc(db, 'reclamos', reclamo.uid),
+    ok ? { estado: 'ok', personaId: p.id } : { estado: 'rechazado', motivo: p && !reclamo.codigo ? 'conectado' : 'datos' },
+  )
   await batch.commit()
+  log(db, ok ? 'recuperacion_ok' : 'recuperacion_rechazada', `«${reclamo.nombre}»: ${motivo}`)
   return ok
 }
 
@@ -530,6 +571,7 @@ export async function empezarDeCero(db, estado, fichas) {
       generacion,
     })
   await batch.commit()
+  log(db, 'empezar_de_cero', `Generación ${estado.generacion} → ${generacion}: todos los celulares vuelven al registro`, estado)
 }
 
 /** Reemplaza la tabla de fichas completa (solo antes de iniciar). */
@@ -539,9 +581,11 @@ export async function reemplazarFichas(db, estado, nuevas, viejas) {
   for (const f of nuevas) escribirFicha(batch, db, f, estado.generacion)
   for (const f of viejas) if (!nuevasN.has(f.n)) batch.update(doc(db, 'fichas', String(f.n)), { estado: 'retirada' })
   await batch.commit()
+  log(db, 'fichas', `Tabla reemplazada: ${nuevas.length} fichas (${nuevas.filter((f) => !f.excluida).length} jugables)`, estado)
 }
 
 /** Saca una ficha de la partida (o la devuelve). Solo fichas sin repartir. */
 export async function excluirFicha(db, ficha, excluir) {
   await updateDoc(doc(db, 'fichas', String(ficha.n)), { estado: excluir ? 'excluida' : 'libre' })
+  log(db, excluir ? 'excluir_ficha' : 'incluir_ficha', ficha.nombre ?? `#${ficha.n}`)
 }

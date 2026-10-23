@@ -12,7 +12,9 @@ import {
 } from '../lib/acciones-pantalla'
 import CajonFichas from './CajonFichas'
 import CajonAjustes from './CajonAjustes'
+import CajonBitacora from './CajonBitacora'
 import { FASES } from '../lib/juego'
+import { registrar, textoError } from '../lib/bitacora'
 
 const CON_CRONO = [FASES.IMPRESION, FASES.ARGUMENTO, FASES.VOTO]
 const EN_TURNO = [FASES.RULETA_PERSONA, FASES.RULETA_FICHA, FASES.RULETA_RETO, ...CON_CRONO]
@@ -51,6 +53,7 @@ export default function Controles({
     } catch (e) {
       if (e?.name === 'YaHecho') return
       console.error(e)
+      registrar(db, 'pantalla', 'error', `control · ${textoError(e)}`, { estado })
       setFallo(e?.message?.startsWith('Hay fichas') ? e.message : 'No se pudo completar. Revisa la conexión e intenta otra vez.')
     } finally {
       setOcupado(false)
@@ -148,6 +151,8 @@ export default function Controles({
           <CajonFichas estado={estado} fichas={fichas} hacer={hacer} setFallo={setFallo} />
 
           <CajonAjustes estado={estado} hacer={hacer} />
+
+          <CajonBitacora hacer={hacer} />
 
           <h3>
             Personas ({conectados.size} conectadas / {personas.length})

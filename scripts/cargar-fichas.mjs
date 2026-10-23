@@ -7,6 +7,9 @@ import { getAuth, signInWithEmailAndPassword } from 'firebase/auth'
 import { collection, doc, getDoc, getDocs, getFirestore, terminate } from 'firebase/firestore'
 import { empezarDeCero, prepararSala, reemplazarFichas } from '../src/lib/acciones-pantalla.js'
 import { leerFichas } from '../src/lib/csv.js'
+import { origen } from '../src/lib/bitacora.js'
+
+origen.quien = 'script'
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, '').split('=')))
 const app = initializeApp({
