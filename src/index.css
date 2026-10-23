@@ -1945,3 +1945,30 @@ button {
   color: var(--tinta-2);
   overflow-wrap: anywhere;
 }
+
+.boton.reaccion {
+  position: relative;
+  min-height: 92px;
+}
+
+.reaccion-n {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--acento);
+}
+
+.motivos {
+  margin: 4px 0;
+  padding-left: 1.2em;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.como-ganar summary {
+  cursor: pointer;
+  font-weight: 700;
+}

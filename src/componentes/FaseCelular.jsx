@@ -3,6 +3,7 @@ import { db } from '../lib/firebase'
 import { useRestante } from '../lib/datos'
 import { FASES, textoReto } from '../lib/juego'
 import {
+  ajustesDe,
   INTERVALO_SENTIMIENTO_MS,
   NIVELES_EVIDENCIA,
   REACCIONES,
@@ -281,14 +282,16 @@ function Formulario({ uid, persona, estado, tipo }) {
   )
 }
 
-/** Barra + reacciones. Se acumula local y se manda como mucho cada 5 s, solo si cambió. */
+/**
+ * Reacciones durante el argumento. Se cuentan en el celular y se mandan juntas como mucho cada
+ * pocos segundos (y al cerrar la fase), solo si hubo reacciones nuevas.
+ */
 function Sentimiento({ uid, persona, estado }) {
   const restante = useRestante(estado)
-  const [barra, setBarra] = useState(0)
   const [conteo, setConteo] = useState({ fuego: 0, duda: 0, cerebro: 0 })
   const [espera, setEspera] = useState(false)
   const pendiente = useRef(false)
-  const actual = useRef({ barra: 0, movio: false, reacciones: { fuego: 0, duda: 0, cerebro: 0 } })
+  const actual = useRef({ fuego: 0, duda: 0, cerebro: 0 })
   const estadoRef = useRef(estado)
   estadoRef.current = estado
 
@@ -296,7 +299,7 @@ function Sentimiento({ uid, persona, estado }) {
     const mandar = () => {
       if (!pendiente.current) return
       pendiente.current = false
-      enviarSentimiento(db, uid, persona.id, estadoRef.current, actual.current).catch(() => {
+      enviarSentimiento(db, uid, persona.id, estadoRef.current, { reacciones: actual.current }).catch(() => {
         pendiente.current = true
       })
     }
@@ -312,26 +315,12 @@ function Sentimiento({ uid, persona, estado }) {
   return (
     <section className="tarjeta">
       <div className="fila-titulo">
-        <h2>¿Te convence?</h2>
+        <h2>Reacciona</h2>
         <Crono restante={restante} total={estado.duracion} />
       </div>
-      <input
-        type="range"
-        min={-100}
-        max={100}
-        value={barra}
-        className="barra-sentimiento"
-        onChange={(e) => {
-          const v = Number(e.target.value)
-          setBarra(v)
-          actual.current = { ...actual.current, barra: v / 100, movio: true }
-          pendiente.current = true
-        }}
-      />
-      <div className="barra-etiquetas">
-        <span>No me convence</span>
-        <span>Me convence</span>
-      </div>
+      <p className="ayuda">
+        Toca mientras {estado.oradorNombre} habla. Reaccionar al menos una vez te da puntos; lo ves todo en la pantalla grande.
+      </p>
       <div className="opciones n3 reacciones">
         {REACCIONES.map((r) => (
           <button
@@ -341,7 +330,7 @@ function Sentimiento({ uid, persona, estado }) {
             onClick={() => {
               const n = { ...conteo, [r.clave]: conteo[r.clave] + 1 }
               setConteo(n)
-              actual.current = { ...actual.current, reacciones: n }
+              actual.current = n
               pendiente.current = true
               setEspera(true)
               setTimeout(() => setEspera(false), REACCION_ESPERA_MS)
@@ -349,11 +338,60 @@ function Sentimiento({ uid, persona, estado }) {
           >
             <span className="reaccion-emoji">{r.emoji}</span>
             <span className="reaccion-txt">{r.texto}</span>
+            <span className="reaccion-n">{conteo[r.clave] || ''}</span>
           </button>
         ))}
       </div>
-      {total >= REACCIONES_MAX && <p className="ayuda">Llegaste al máximo de reacciones de este turno.</p>}
+      <p className="ayuda">
+        {total >= REACCIONES_MAX
+          ? 'Llegaste al máximo de reacciones de este turno.'
+          : `Te quedan ${REACCIONES_MAX - total} reacciones en este turno.`}
+      </p>
     </section>
+  )
+}
+
+function Motivos({ lista }) {
+  if (!lista?.length) return null
+  return (
+    <ul className="motivos">
+      {lista.map((m) => (
+        <li key={m}>{m}</li>
+      ))}
+    </ul>
+  )
+}
+
+/** Cómo se ganan puntos, con los valores vigentes del cajón. */
+export function ComoGanar({ estado }) {
+  const P = ajustesDe(estado).puntos
+  return (
+    <details className="mis-fichas como-ganar">
+      <summary>¿Cómo gano puntos?</summary>
+      <p className="ayuda">En cada turno (hasta {P.impresion + P.reaccion + P.voto + P.prediccion} puntos):</p>
+      <ul className="motivos">
+        <li>Responder las tres preguntas de la primera impresión: +{P.impresion}</li>
+        <li>Acertar el nivel de evidencia de la ficha: +{P.prediccion}</li>
+        <li>Reaccionar al menos una vez mientras alguien argumenta: +{P.reaccion}</li>
+        <li>Votar al final (me sirve + nota): +{P.voto}</li>
+        <li>
+          Cada {P.rachaCada} turnos seguidos con impresión y voto: +{P.racha}
+        </li>
+      </ul>
+      <p className="ayuda">Cuando te toca argumentar:</p>
+      <ul className="motivos">
+        <li>Base +{P.oradorBase}, más la nota promedio × {P.oradorPorNota}</li>
+        <li>
+          +{P.oradorPorDiezPct} por cada 10 % de la sala que convenzas (máx. {P.oradorPersuasionMax}); si casi todos ya
+          pensaban como tú, +{P.persuasionFija} fijos
+        </li>
+        <li>
+          Contracorriente +{P.contracorriente}: atacar una ficha respaldada o defender una poco respaldada, con nota de{' '}
+          {P.contracorrienteNota} o más
+        </li>
+      </ul>
+      <p className="ayuda">Nunca se restan puntos.</p>
+    </details>
   )
 }
 
@@ -433,16 +471,18 @@ function MiResultado({ persona, estado }) {
           </div>
         </div>
         {soyOrador ? (
-          <p className="aviso ok">
-            Ganaste {r.puntosOrador} puntos en tu turno{r.contracorriente ? ' (⚡ incluye contracorriente)' : ''}.
-          </p>
+          <>
+            <p className="aviso ok">+{r.puntosOrador} puntos en tu turno</p>
+            <Motivos lista={r.motivosOrador} />
+          </>
         ) : mio ? (
           <>
             <p className="aviso ok">+{mio.puntos} puntos en este turno</p>
+            <Motivos lista={mio.motivos} />
             {mio.persuadido && <p className="ayuda">🔄 Te convencieron: cambiaste de opinión.</p>}
           </>
         ) : (
-          <p className="ayuda">No respondiste en este turno.</p>
+          <p className="ayuda">No participaste en este turno: 0 puntos.</p>
         )}
       </section>
     </>

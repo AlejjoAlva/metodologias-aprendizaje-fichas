@@ -95,7 +95,7 @@ export default function CentroPantalla({ estado, fichas, restante, respuestas, s
           <Impresion respuestas={respuestas} presentes={presentes} />
         </div>
       )}
-      {fase === FASES.ARGUMENTO && <Argumento sentimientos={sentimientos} personas={personas} />}
+      {fase === FASES.ARGUMENTO && <Argumento sentimientos={sentimientos} personas={personas} presentes={presentes} />}
       {fase === FASES.VOTO && <Votando respuestas={respuestas} presentes={presentes} />}
       {fase === FASES.RESULTADO && <Resultado estado={estado} />}
     </div>
@@ -216,22 +216,13 @@ function Impresion({ respuestas, presentes }) {
   )
 }
 
-function Argumento({ sentimientos, personas }) {
+function Argumento({ sentimientos, personas, presentes }) {
   // Solo cuentan los celulares que de verdad pertenecen a la persona que dicen ser.
   const validos = sentimientos.filter((s) => personas.find((p) => p.id === s.personaId)?.uids?.includes(s.id))
-  const conBarra = validos.filter((s) => s.movio)
-  const prom = conBarra.length ? conBarra.reduce((a, s) => a + (s.barra || 0), 0) / conBarra.length : 0
   const suma = (k) => validos.reduce((a, s) => a + (s.reacciones?.[k] || 0), 0)
+  const reaccionaron = validos.filter((s) => REACCIONES.some((r) => s.reacciones?.[r.clave] > 0)).length
   return (
     <div className="medidores">
-      <div className="termometro">
-        <span>No me convence</span>
-        <div className="termometro-pista">
-          <div className="termometro-marca" style={{ left: `${50 + prom * 50}%` }} />
-        </div>
-        <span>Me convence</span>
-      </div>
-      <p className="ayuda centro">Se actualiza cada pocos segundos · {conBarra.length} moviendo la barra</p>
       <div className="contadores">
         {REACCIONES.map((r) => (
           <div key={r.clave} className="contador">
@@ -241,6 +232,9 @@ function Argumento({ sentimientos, personas }) {
           </div>
         ))}
       </div>
+      <p className="ayuda centro">
+        {reaccionaron} de {presentes} ya reaccionaron · se actualiza cada pocos segundos
+      </p>
     </div>
   )
 }

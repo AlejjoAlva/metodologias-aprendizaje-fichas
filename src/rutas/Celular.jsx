@@ -4,7 +4,7 @@ import { asegurarAnonimo, db, rtdb } from '../lib/firebase'
 import { useEstado } from '../lib/datos'
 import { buscarPersona, inscribirse, marcarPresencia, pedirRecuperacion } from '../lib/acciones-celular'
 import { ranking } from '../lib/juego'
-import FaseCelular from '../componentes/FaseCelular'
+import FaseCelular, { ComoGanar } from '../componentes/FaseCelular'
 import { registrar, textoError } from '../lib/bitacora'
 import MisFichas from '../componentes/MisFichas'
 
@@ -360,6 +360,7 @@ function Juego({ uid, persona, estado, codigo }) {
         </div>
       </section>
       <FaseCelular uid={uid} persona={persona} estado={estado} />
+      <ComoGanar estado={estado} />
       <MisFichas fichas={fichas} estado={estado} />
     </Marco>
   )

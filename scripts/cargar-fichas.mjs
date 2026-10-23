@@ -26,6 +26,13 @@ console.log('inválidas:', resumen.invalidas.map((f) => `${f.nombre} («${f.nive
 
 let estado = (await getDoc(doc(db, 'juego/estado'))).data()
 if (!estado) estado = await prepararSala(db, [])
+// Empezar de cero saca a todos los celulares de la partida: no se hace con gente dentro sin --forzar.
+const dentro = (await getDocs(collection(db, 'personas'))).docs.filter((d) => d.data().generacion === estado.generacion)
+if (dentro.length && args.forzar === undefined) {
+  console.error(`Hay ${dentro.length} personas en la partida actual (${dentro.map((d) => d.data().nombre).join(', ')}).`)
+  console.error('Cargar fichas las sacaría a todas. Usa --forzar si de verdad quieres empezar de cero.')
+  process.exit(1)
+}
 const viejas = (await getDocs(collection(db, 'fichas'))).docs.map((d) => d.data())
 await empezarDeCero(db, estado, viejas.filter((f) => f.estado !== 'retirada'))
 estado = (await getDoc(doc(db, 'juego/estado'))).data()

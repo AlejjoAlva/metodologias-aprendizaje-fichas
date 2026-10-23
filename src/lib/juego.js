@@ -136,7 +136,7 @@ export function nombreUnico(nombre, existentes) {
 const impresionCompleta = (i) =>
   !!i && typeof i.conoce === 'boolean' && !!i.util && !!i.prediccion
 const votoCompleto = (v) => !!v && !!v.sirve && Number.isFinite(v.nota)
-const reacciono = (s) => !!s && (s.movio || (s.reacciones ?? 0) > 0)
+const reacciono = (s) => !!s && (s.reacciones ?? 0) > 0
 
 /** ¿El turno es contracorriente? Solo Defiende/Ataca contra el veredicto, nunca Debatida. */
 export function esContracorriente(reto, nivel) {
@@ -149,7 +149,7 @@ export function esContracorriente(reto, nivel) {
  * impresiones: { conoce: bool, util: 'si'|'no'|'ni', prediccion: nivel de evidencia }
  *   (el orador también responde la impresión: suma por ella y por su predicción)
  * votos: { sirve: 'si'|'no', nota: 1..5 } (el orador no vota)
- * sentimientos: { movio: bool, reacciones: número total, fuego: número }
+ * sentimientos: { reacciones: número total, fuego: número }
  */
 export function calcularTurno({ reto, nivel, oradorId, impresiones, votos, sentimientos, puntos = PUNTOS }) {
   const P = { ...PUNTOS, ...puntos }
@@ -340,4 +340,30 @@ export function premios(turnos, marcador, nombre) {
       engano: ficha(engano, engano && `${pctErrado(engano)}% predijo mal su evidencia`),
     },
   }
+}
+
+/**
+ * Por qué sumó puntos cada quien en el turno, en frases cortas («Voto final +2»).
+ * Para el orador: base, nota, persuasión, contracorriente, más su impresión y predicción.
+ */
+export function motivosTurno(id, { oradorId, impresiones, votos, sentimientos, calculo, rachaNueva = false, puntos = PUNTOS }) {
+  const P = { ...PUNTOS, ...puntos }
+  const m = []
+  if (impresionCompleta(impresiones?.[id])) m.push(`Primera impresión +${P.impresion}`)
+  if (calculo.aciertos.includes(id)) m.push(`Predicción de evidencia acertada +${P.prediccion}`)
+  if (id === oradorId) {
+    m.push(`Base de orador +${P.oradorBase}`)
+    m.push(`Nota ${calculo.notaPromedio ?? 0} × ${P.oradorPorNota} = +${Math.round((calculo.notaPromedio ?? 0) * P.oradorPorNota)}`)
+    m.push(
+      calculo.persuasionFija
+        ? `Pocos persuadibles (${calculo.pctPersuadibles}%): +${calculo.puntosPersuasion} fijos`
+        : `Persuasión ${calculo.pctPersuadido ?? 0}%: +${calculo.puntosPersuasion}`,
+    )
+    if (calculo.contracorriente) m.push(`Contracorriente +${P.contracorriente}`)
+    return m
+  }
+  if (reacciono(sentimientos?.[id])) m.push(`Reaccionaste +${P.reaccion}`)
+  if (votoCompleto(votos?.[id])) m.push(`Voto final +${P.voto}`)
+  if (rachaNueva) m.push(`Racha de ${P.rachaCada} turnos +${P.racha}`)
+  return m
 }

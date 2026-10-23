@@ -22,6 +22,7 @@ import {
   aplicarTurno,
   calcularTurno,
   candidatosRuleta,
+  motivosTurno,
   premios,
   ranking,
   repartir,
@@ -335,10 +336,8 @@ export function sentimientosValidos(lista, personas) {
     const r = s.reacciones || {}
     const total = (r.fuego || 0) + (r.duda || 0) + (r.cerebro || 0)
     out[s.personaId] = {
-      movio: !!s.movio || !!prev?.movio,
       reacciones: total + (prev?.reacciones || 0),
       fuego: (r.fuego || 0) + (prev?.fuego || 0),
-      barra: s.barra,
     }
   }
   return out
@@ -376,7 +375,9 @@ export async function cerrarTurno(db, estado, { personas, conectados }) {
   const persuadidos = new Set(calculo.persuadidos)
   const aciertos = new Set(calculo.aciertos)
 
-  const detalle = Object.keys({ ...impresiones, ...votos })
+  const ctxMotivos = { oradorId: estado.oradorId, impresiones, votos, sentimientos, calculo, puntos }
+  const rachaNueva = (id) => (marcador[id]?.rachas ?? 0) > (estado.marcador?.[id]?.rachas ?? 0)
+  const detalle = Object.keys({ ...impresiones, ...votos, ...sentimientos })
     .filter((id) => id !== estado.oradorId && nombre[id])
     .map((id) => ({
       id,
@@ -388,7 +389,10 @@ export async function cerrarTurno(db, estado, { personas, conectados }) {
       prediccion: impresiones[id]?.prediccion ?? null,
       persuadido: persuadidos.has(id),
       acierto: aciertos.has(id),
-      puntos: Object.values(calculo.puntosTurno[id] || {}).reduce((a, b) => a + b, 0),
+      puntos:
+        Object.values(calculo.puntosTurno[id] || {}).reduce((a, b) => a + b, 0) +
+        (rachaNueva(id) ? puntos.racha : 0),
+      motivos: motivosTurno(id, { ...ctxMotivos, rachaNueva: rachaNueva(id) }),
     }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre))
 
@@ -420,6 +424,7 @@ export async function cerrarTurno(db, estado, { personas, conectados }) {
     fuegos: calculo.fuegos,
     pctConoce: calculo.pctConoce,
     puntosOrador: Object.values(calculo.puntosTurno[estado.oradorId] || {}).reduce((a, b) => a + b, 0),
+    motivosOrador: motivosTurno(estado.oradorId, ctxMotivos),
     detalle,
   }
 

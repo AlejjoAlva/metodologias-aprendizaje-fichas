@@ -15,6 +15,7 @@ import {
   candidatosRuleta,
   nombreUnico,
   premios,
+  motivosTurno,
 } from '../src/lib/juego.js'
 import { PUNTOS } from '../src/lib/config.js'
 
@@ -139,7 +140,7 @@ function turnoBase(reto = 'defiende', nivel = 'Respaldada') {
       p4: { sirve: 'no', nota: 2 },
       p5: { sirve: 'si', nota: 5 },
     },
-    sentimientos: { p1: { reacciones: 2 }, p3: { movio: true } },
+    sentimientos: { p1: { reacciones: 2 }, p3: { reacciones: 1 } },
   }
 }
 
@@ -309,4 +310,16 @@ test('premios: insignias y rankings de fichas', () => {
   const vacio = premios([], {}, {})
   assert.equal(vacio.insignias.abogado, null)
   assert.equal(vacio.fichas.engano, null)
+})
+
+test('motivos del turno: frases con los puntos de cada quien', () => {
+  const t = turnoBase()
+  const calculo = calcularTurno(t)
+  const ctx = { ...t, calculo }
+  assert.deepEqual(motivosTurno('p1', ctx), ['Primera impresión +1', 'Predicción de evidencia acertada +3', 'Reaccionaste +1', 'Voto final +2'])
+  assert.deepEqual(motivosTurno('p5', { ...ctx, rachaNueva: true }), ['Voto final +2', 'Racha de 3 turnos +3'])
+  const o = motivosTurno('o', ctx)
+  assert.equal(o[0], 'Primera impresión +1')
+  assert.ok(o.includes('Base de orador +5'))
+  assert.ok(o.some((x) => x.startsWith('Persuasión 67%')))
 })

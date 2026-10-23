@@ -83,8 +83,7 @@ async function bot(i) {
       for (let k = 0; k < 6; k++) {
         await espera(4000 + Math.random() * 4000)
         r[azar(['fuego', 'fuego', 'duda', 'cerebro'])]++
-        const barra = Math.max(-1, Math.min(1, opinion * 2 - 1 + (Math.random() - 0.5)))
-        enviarSentimiento(c.db, user.uid, yo.personaId, e, { barra, movio: true, reacciones: { ...r } }).catch(() => {})
+        enviarSentimiento(c.db, user.uid, yo.personaId, e, { reacciones: { ...r } }).catch(() => {})
       }
     } else if (e.fase === FASES.VOTO) {
       hecho.add(clave)

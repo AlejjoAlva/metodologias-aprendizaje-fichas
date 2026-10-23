@@ -3,7 +3,7 @@
 
 export const PUNTOS = {
   impresion: 1, // primera impresión completa (conozco, suena útil y predicción)
-  reaccion: 1, // reaccionar al menos una vez durante el argumento
+  reaccion: 1, // reaccionar al menos una vez durante el argumento (con 🔥, 🤔 o 🧠)
   voto: 2, // voto final completo (me sirve y nota)
   prediccion: 3, // predicción de evidencia acertada (se compara con la base, no con la sala)
   racha: 3, // cada 3 turnos seguidos con impresión y voto completos
@@ -83,11 +83,12 @@ export function ajustesDe(estado) {
   }
 }
 
-// El celular manda barra + reacciones como máximo una vez cada tantos milisegundos.
-export const INTERVALO_SENTIMIENTO_MS = 5000
+// El celular manda sus reacciones como máximo una vez cada tantos milisegundos (y al cerrar la
+// fase). En 60 s de argumento son, a lo sumo, 8 escrituras por celular y turno.
+export const INTERVALO_SENTIMIENTO_MS = 8000
 // Una reacción cada tantos milisegundos y un máximo por turno, por persona.
-export const REACCION_ESPERA_MS = 2000
-export const REACCIONES_MAX = 15
+export const REACCION_ESPERA_MS = 2500
+export const REACCIONES_MAX = 12
 
 export const REACCIONES = [
   { clave: 'fuego', emoji: '🔥', texto: 'Buen punto' },

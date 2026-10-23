@@ -84,8 +84,6 @@ export async function enviarSentimiento(db, uid, personaId, estado, s) {
     personaId,
     generacion: estado.generacion,
     turno: estado.turno,
-    barra: s.barra,
-    movio: s.movio,
     reacciones: s.reacciones,
   })
 }

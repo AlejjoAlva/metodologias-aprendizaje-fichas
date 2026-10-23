@@ -265,8 +265,8 @@ async function main() {
     const sentimientos = {}
     await Promise.all(
       publico.slice(0, Math.ceil(publico.length / 2)).map(async (c) => {
-        const s = { barra: Math.random() * 2 - 1, movio: true, reacciones: { fuego: 2, duda: 0, cerebro: 1 } }
-        sentimientos[c.personaId] = { movio: true, reacciones: 3, fuego: 2 }
+        const s = { reacciones: { fuego: 2, duda: 0, cerebro: 1 } }
+        sentimientos[c.personaId] = { reacciones: 3, fuego: 2 }
         await enviarSentimiento(c.db, c.uid, c.personaId, e, s)
       }),
     )
