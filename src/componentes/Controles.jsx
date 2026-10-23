@@ -14,7 +14,7 @@ import CajonFichas from './CajonFichas'
 import { FASES } from '../lib/juego'
 
 const CON_CRONO = [FASES.IMPRESION, FASES.ARGUMENTO, FASES.VOTO]
-const EN_TURNO = [FASES.RULETA_PERSONA, FASES.RULETA_FICHA, FASES.RULETA_POSTURA, ...CON_CRONO]
+const EN_TURNO = [FASES.RULETA_PERSONA, FASES.RULETA_FICHA, FASES.RULETA_RETO, ...CON_CRONO]
 
 const TEXTO_SIGUIENTE = {
   [FASES.SALA]: 'Girar ruleta',
@@ -31,6 +31,7 @@ export default function Controles({
   conectados,
   fichas,
   onSiguiente,
+  conNiveles,
   onSaltar,
   fallo,
   setFallo,
@@ -72,7 +73,7 @@ export default function Controles({
           <button
             className="ctl principal"
             disabled={ocupado || conectados.size === 0}
-            onClick={hacer(() => iniciarPartida(db, estado, { fichas, personas, conectados }))}
+            onClick={hacer(async () => iniciarPartida(db, estado, { fichas, personas, conectados, niveles: await conNiveles() }))}
           >
             ▶ Iniciar partida ({conectados.size})
           </button>

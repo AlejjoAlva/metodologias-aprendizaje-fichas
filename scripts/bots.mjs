@@ -7,7 +7,7 @@ import { initializeApp } from 'firebase/app'
 import { connectAuthEmulator, getAuth, signInAnonymously } from 'firebase/auth'
 import { connectFirestoreEmulator, doc, getFirestore, onSnapshot } from 'firebase/firestore'
 import { connectDatabaseEmulator, getDatabase } from 'firebase/database'
-import { elegirPostura, enviarSentimiento, inscribirse, marcarPresencia, responder } from '../src/lib/acciones-celular.js'
+import { elegirReto, enviarSentimiento, inscribirse, marcarPresencia, responder } from '../src/lib/acciones-celular.js'
 import { FASES } from '../src/lib/juego.js'
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, '').split('=')))
@@ -61,16 +61,21 @@ async function bot(i) {
     if (!e) return
     const clave = `${e.generacion}_${e.turno}_${e.fase}`
     const soyOrador = e.oradorId === yo.personaId
-    if (e.fase === FASES.RULETA_POSTURA && soyOrador && e.posturaSorteo === 'elige' && !hecho.has(clave)) {
+    if (e.fase === FASES.RULETA_RETO && soyOrador && e.retoSorteo === 'elige' && !hecho.has(clave)) {
       hecho.add(clave)
       await espera(2000 + Math.random() * 4000)
-      elegirPostura(c.db, e, azar(['defiende', 'ataca'])).catch(() => {})
+      elegirReto(c.db, e, azar(['aplicala', 'defiende', 'ataca'])).catch(() => {})
     }
-    if (soyOrador || !e.cronoInicio || hecho.has(clave)) return
+    // El orador solo responde la primera impresión.
+    if ((soyOrador && e.fase !== FASES.IMPRESION) || !e.cronoInicio || hecho.has(clave)) return
     if (e.fase === FASES.IMPRESION) {
       hecho.add(clave)
-      await espera(1500 + Math.random() * 12000)
-      const v = { conoce: Math.random() < 0.55, util: azar(['si', 'si', 'no', 'ni']), prediccion: azar(['si', 'no']) }
+      await espera(1500 + Math.random() * 15000)
+      const v = {
+        conoce: Math.random() < 0.55,
+        util: azar(['si', 'si', 'no', 'ni']),
+        prediccion: azar(['Respaldada', 'Debatida', 'Poco respaldada']),
+      }
       responder(c.db, user.uid, yo.personaId, e, v).catch(() => {})
     } else if (e.fase === FASES.ARGUMENTO) {
       hecho.add(clave)

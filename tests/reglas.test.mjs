@@ -100,9 +100,12 @@ test('no se puede responder por otra persona ni con id inventado', async () => {
   await assertFails(setDoc(doc(celular('ana'), 'respuestas', 'otro_id'), r2))
 })
 
-test('el orador no vota su propio turno', async () => {
-  const r = resp({ uid: 'orador', personaId: 'orador' })
-  await assertFails(setDoc(doc(celular('orador'), 'respuestas', idResp(r)), r))
+test('el orador da su primera impresión pero no vota su propio turno', async () => {
+  const r = resp({ uid: 'orador', personaId: 'orador', valores: { conoce: true, util: 'si', prediccion: 'Debatida' } })
+  await assertSucceeds(setDoc(doc(celular('orador'), 'respuestas', idResp(r)), r))
+  await preparar({ fase: 'voto' })
+  const v = resp({ uid: 'orador', personaId: 'orador', fase: 'voto', valores: { sirve: 'si', nota: 5 } })
+  await assertFails(setDoc(doc(celular('orador'), 'respuestas', idResp(v)), v))
 })
 
 test('los votos ajenos no se leen; los propios sí', async () => {
@@ -135,13 +138,13 @@ test('sentimiento: solo el propio y solo lo lee la pantalla', async () => {
   await assertSucceeds(getDoc(doc(pantalla(), 'sentimiento/ana')))
 })
 
-test('"Tú eliges": solo el orador, en la ruleta de postura', async () => {
-  await assertFails(setDoc(doc(celular('orador'), 'postura/0_1'), { eleccion: 'ataca' }))
-  await preparar({ fase: 'ruleta_postura' })
-  await assertFails(setDoc(doc(celular('ana'), 'postura/0_1'), { eleccion: 'ataca' }))
-  await assertFails(setDoc(doc(celular('orador'), 'postura/0_1'), { eleccion: 'otra' }))
-  await assertSucceeds(setDoc(doc(celular('orador'), 'postura/0_1'), { eleccion: 'ataca' }))
-  await assertFails(setDoc(doc(celular('orador'), 'postura/0_1'), { eleccion: 'defiende' }))
+test('"Tú eliges": solo el orador, en la ruleta de reto, entre los tres retos', async () => {
+  await assertFails(setDoc(doc(celular('orador'), 'reto/0_1'), { eleccion: 'ataca' }))
+  await preparar({ fase: 'ruleta_reto' })
+  await assertFails(setDoc(doc(celular('ana'), 'reto/0_1'), { eleccion: 'ataca' }))
+  await assertFails(setDoc(doc(celular('orador'), 'reto/0_1'), { eleccion: 'elige' }))
+  await assertSucceeds(setDoc(doc(celular('orador'), 'reto/0_1'), { eleccion: 'aplicala' }))
+  await assertFails(setDoc(doc(celular('orador'), 'reto/0_1'), { eleccion: 'defiende' }))
 })
 
 test('la evidencia de las fichas no la lee ningún celular; el anfitrión sí', async () => {

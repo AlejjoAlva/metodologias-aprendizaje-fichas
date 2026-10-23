@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { db } from '../lib/firebase'
 import { useRestante } from '../lib/datos'
-import { FASES } from '../lib/juego'
-import { INTERVALO_SENTIMIENTO_MS, REACCIONES, REACCIONES_MAX, REACCION_ESPERA_MS } from '../lib/config'
-import { elegirPostura, enviarSentimiento, responder, yaRespondi } from '../lib/acciones-celular'
+import { FASES, textoReto } from '../lib/juego'
+import {
+  INTERVALO_SENTIMIENTO_MS,
+  NIVELES_EVIDENCIA,
+  REACCIONES,
+  REACCIONES_MAX,
+  REACCION_ESPERA_MS,
+} from '../lib/config'
+import { elegirReto, enviarSentimiento, responder, yaRespondi } from '../lib/acciones-celular'
 import Crono from './Crono'
 
-const POSTURA_TXT = { defiende: 'Defiende', ataca: 'Ataca', elige: 'Tú eliges' }
+const RETO_TXT = { aplicala: 'Aplícala', defiende: 'Defiende', ataca: 'Ataca', elige: 'Tú eliges' }
 
 export default function FaseCelular({ uid, persona, estado }) {
   const soyOrador = estado.oradorId === persona.id
@@ -25,7 +31,12 @@ export default function FaseCelular({ uid, persona, estado }) {
   return (
     <>
       <FichaEnJuego estado={estado} soyOrador={soyOrador} />
-      {soyOrador ? (
+      {soyOrador && fase === FASES.IMPRESION ? (
+        <>
+          <Guion estado={estado} />
+          <Formulario key={`${estado.turno}-i`} uid={uid} persona={persona} estado={estado} tipo="impresion" />
+        </>
+      ) : soyOrador ? (
         <VistaOrador estado={estado} />
       ) : fase === FASES.IMPRESION ? (
         <Formulario key={`${estado.turno}-i`} uid={uid} persona={persona} estado={estado} tipo="impresion" />
@@ -45,20 +56,66 @@ export default function FaseCelular({ uid, persona, estado }) {
   )
 }
 
+function RetoEtiqueta({ estado }) {
+  if (!estado.reto) return null
+  const t = textoReto(estado.reto, estado.ficha?.categoria)
+  return (
+    <span className={`postura ${estado.reto}`}>
+      {t.titulo}
+      {t.lema ? ` · ${t.lema}` : ''}
+    </span>
+  )
+}
+
+function Guion({ estado }) {
+  const t = textoReto(estado.reto, estado.ficha?.categoria)
+  if (!t) return null
+  return (
+    <section className="tarjeta guion-cel">
+      <h2>Tu guion: {t.titulo}</h2>
+      {t.lema && <p className="ayuda">{t.lema}</p>}
+      <ol>
+        {t.pasos.map((p) => (
+          <li key={p}>{p}</li>
+        ))}
+      </ol>
+      <p className="ayuda">Mientras preparas, responde tu primera impresión: también sumas por ella.</p>
+    </section>
+  )
+}
+
+const FASES_CON_DESCRIPCION = [FASES.IMPRESION, FASES.ARGUMENTO, FASES.VOTO]
+
 function FichaEnJuego({ estado, soyOrador }) {
   const ruletaPersona = estado.fase === FASES.RULETA_PERSONA
   if (!estado.oradorNombre || estado.fase === FASES.RESULTADO) return null
+  const f = estado.ficha
   return (
     <section className={`ficha-juego ${soyOrador ? 'soy-orador' : ''}`}>
       <p className="ficha-juego-quien">
         {soyOrador ? '¡Te tocó a ti!' : `Turno de ${estado.oradorNombre}`}
-        {estado.postura && <span className={`postura ${estado.postura}`}>{POSTURA_TXT[estado.postura]}</span>}
+        <RetoEtiqueta estado={estado} />
       </p>
-      {!ruletaPersona && estado.ficha && (
+      {!ruletaPersona && f && (
         <>
-          <p className="ficha-juego-nombre">{estado.ficha.nombre}</p>
-          <p className="ficha-juego-cat">{estado.ficha.categoria}</p>
-          <p className="ficha-juego-desc">{estado.ficha.descripcion}</p>
+          <p className="ficha-juego-nombre">{f.nombre}</p>
+          <p className="ficha-juego-cat">{f.categoria}</p>
+          {FASES_CON_DESCRIPCION.includes(estado.fase) && (
+            <>
+              <p className="ficha-juego-desc">{f.que_es ?? f.descripcion}</p>
+              {f.ejemplo && (
+                <p className="ficha-juego-desc">
+                  <strong>Ejemplo:</strong> {f.ejemplo}
+                </p>
+              )}
+              {f.como_se_aplica && (
+                <details className="plegable">
+                  <summary>Cómo se aplica</summary>
+                  <p className="ficha-juego-desc pre">{f.como_se_aplica}</p>
+                </details>
+              )}
+            </>
+          )}
         </>
       )}
     </section>
@@ -71,13 +128,13 @@ function VistaOrador({ estado }) {
   const [error, setError] = useState(null)
   const { fase } = estado
 
-  if (fase === FASES.RULETA_POSTURA && estado.posturaSorteo === 'elige' && !estado.postura)
+  if (fase === FASES.RULETA_RETO && estado.retoSorteo === 'elige' && !estado.reto)
     return (
       <section className="tarjeta">
-        <h2>Tú eliges tu postura</h2>
+        <h2>Tú eliges tu reto</h2>
         <Crono restante={restante} total={estado.duracion} />
-        <div className="opciones dos">
-          {['defiende', 'ataca'].map((p) => (
+        <div className="opciones n3">
+          {['aplicala', 'defiende', 'ataca'].map((p) => (
             <button
               key={p}
               className={`boton opcion ${p}`}
@@ -85,13 +142,13 @@ function VistaOrador({ estado }) {
               onClick={async () => {
                 setEligiendo(true)
                 try {
-                  await elegirPostura(db, estado, p)
+                  await elegirReto(db, estado, p)
                 } catch {
                   setError('No alcanzó a llegar. La ruleta decide.')
                 }
               }}
             >
-              {POSTURA_TXT[p]}
+              {RETO_TXT[p]}
             </button>
           ))}
         </div>
@@ -101,7 +158,6 @@ function VistaOrador({ estado }) {
     )
 
   const texto = {
-    [FASES.IMPRESION]: 'La sala está dando su primera impresión. Prepara tu argumento.',
     [FASES.ARGUMENTO]: '¡Tu turno de hablar! Convence a la sala.',
     [FASES.VOTO]: 'La sala está votando.',
     [FASES.RESULTADO]: null,
@@ -112,7 +168,7 @@ function VistaOrador({ estado }) {
     <section className="tarjeta centro">
       {restante != null && <Crono restante={restante} total={estado.duracion} />}
       <p className="grande">{texto}</p>
-      <p className="ayuda">En tu turno no votas: tus puntos salen de cómo argumentes.</p>
+      <p className="ayuda">En tu turno no votas el final: tus puntos salen de cómo argumentes.</p>
     </section>
   )
 }
@@ -123,12 +179,12 @@ const OPCIONES = {
     { campo: 'util', titulo: '¿Suena útil?', ops: [['si', 'Sí'], ['no', 'No'], ['ni', 'Ni idea']] },
     {
       campo: 'prediccion',
-      titulo: 'Al final, ¿la mayoría dirá que le sirve?',
-      ops: [['si', 'Sí'], ['no', 'No']],
+      titulo: '¿Qué nivel de evidencia tiene?',
+      ops: NIVELES_EVIDENCIA.map((n) => [n.valor, n.valor, n.ayuda]),
     },
   ],
   voto: [
-    { campo: 'sirve', titulo: '¿Te sirve?', ops: [['si', 'Sí'], ['no', 'No']] },
+    { campo: 'sirve', titulo: '¿Te sirve?', ayuda: 'Usarla o tenerla en cuenta.', ops: [['si', 'Sí'], ['no', 'No']] },
     { campo: 'nota', titulo: 'Nota del argumento', ops: [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5']] },
   ],
 }
@@ -180,8 +236,9 @@ function Formulario({ uid, persona, estado, tipo }) {
       {preguntas.map((p) => (
         <fieldset key={p.campo} className="pregunta" disabled={bloqueado}>
           <legend>{p.titulo}</legend>
-          <div className={`opciones n${p.ops.length}`}>
-            {p.ops.map(([v, txt]) => (
+          {p.ayuda && <p className="ayuda">{p.ayuda}</p>}
+          <div className={`opciones n${p.ops.length} ${p.ops[0][2] ? 'con-ayuda' : ''}`}>
+            {p.ops.map(([v, txt, ayuda]) => (
               <button
                 key={String(v)}
                 type="button"
@@ -189,6 +246,7 @@ function Formulario({ uid, persona, estado, tipo }) {
                 onClick={() => setValores((x) => ({ ...x, [p.campo]: v }))}
               >
                 {txt}
+                {ayuda && <span className="opcion-ayuda">{ayuda}</span>}
               </button>
             ))}
           </div>
@@ -302,35 +360,64 @@ function MiResultado({ persona, estado }) {
     )
   const mio = r.detalle?.find((d) => d.id === persona.id)
   const soyOrador = estado.oradorId === persona.id
+  const acerte = soyOrador ? r.oradorAcerto : mio?.acierto
+  const rev = r.revelacion || {}
   return (
-    <section className="tarjeta">
-      <h2>Resultado</h2>
-      <div className="cifras">
-        <div>
-          <span className="cifra">{r.pctSi ?? '—'}%</span>
-          <span className="cifra-txt">dice que le sirve</span>
+    <>
+      <section className="tarjeta revelacion-cel">
+        <p className="ayuda">«{estado.ficha?.nombre}» tiene evidencia…</p>
+        <p className={`rev-valor-cel nivel-${rev.nivel === 'Respaldada' ? 'si' : rev.nivel === 'Debatida' ? 'ni' : 'no'}`}>
+          {rev.nivel ?? '—'}
+        </p>
+        <p className={`aviso ${acerte ? 'ok' : ''}`}>
+          {acerte ? '🎯 ¡Acertaste la predicción!' : 'No acertaste esta vez.'} {r.aciertos} de {r.predijeron} acertaron.
+        </p>
+        {rev.texto && (
+          <p>
+            <strong>Evidencia:</strong> {rev.texto}
+          </p>
+        )}
+        {rev.mito && (
+          <p>
+            <strong>Mito y límites:</strong> {rev.mito}
+          </p>
+        )}
+        {rev.origen && (
+          <p className="ayuda">
+            <strong>Origen:</strong> {rev.origen}
+          </p>
+        )}
+      </section>
+      <section className="tarjeta">
+        <h2>Resultado</h2>
+        <div className="cifras">
+          <div>
+            <span className="cifra">{r.pctSi ?? '—'}%</span>
+            <span className="cifra-txt">dice que le sirve</span>
+          </div>
+          <div>
+            <span className="cifra">{r.notaPromedio ?? '—'}</span>
+            <span className="cifra-txt">nota del argumento</span>
+          </div>
+          <div>
+            <span className="cifra">{r.persuadidos}</span>
+            <span className="cifra-txt">cambiaron de opinión</span>
+          </div>
         </div>
-        <div>
-          <span className="cifra">{r.notaPromedio ?? '—'}</span>
-          <span className="cifra-txt">nota del argumento</span>
-        </div>
-        <div>
-          <span className="cifra">{r.persuadidos}</span>
-          <span className="cifra-txt">cambiaron de opinión</span>
-        </div>
-      </div>
-      {soyOrador ? (
-        <p className="aviso ok">Ganaste {r.puntosOrador} puntos por tu argumento.</p>
-      ) : mio ? (
-        <>
-          <p className="aviso ok">+{mio.puntos} puntos en este turno</p>
-          {mio.acierto && <p className="ayuda">🎯 Acertaste la predicción.</p>}
-          {mio.persuadido && <p className="ayuda">🔄 Te convencieron: cambiaste de opinión.</p>}
-        </>
-      ) : (
-        <p className="ayuda">No respondiste en este turno.</p>
-      )}
-    </section>
+        {soyOrador ? (
+          <p className="aviso ok">
+            Ganaste {r.puntosOrador} puntos en tu turno{r.contracorriente ? ' (⚡ incluye contracorriente)' : ''}.
+          </p>
+        ) : mio ? (
+          <>
+            <p className="aviso ok">+{mio.puntos} puntos en este turno</p>
+            {mio.persuadido && <p className="ayuda">🔄 Te convencieron: cambiaste de opinión.</p>}
+          </>
+        ) : (
+          <p className="ayuda">No respondiste en este turno.</p>
+        )}
+      </section>
+    </>
   )
 }
 

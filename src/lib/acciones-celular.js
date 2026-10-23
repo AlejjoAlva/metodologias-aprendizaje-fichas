@@ -75,8 +75,8 @@ export async function yaRespondi(db, estado, personaId) {
   }
 }
 
-export async function elegirPostura(db, estado, eleccion) {
-  await setDoc(doc(db, 'postura', `${estado.generacion}_${estado.turno}`), { eleccion })
+export async function elegirReto(db, estado, eleccion) {
+  await setDoc(doc(db, 'reto', `${estado.generacion}_${estado.turno}`), { eleccion })
 }
 
 export async function enviarSentimiento(db, uid, personaId, estado, s) {

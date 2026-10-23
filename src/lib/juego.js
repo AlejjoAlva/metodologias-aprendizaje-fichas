@@ -1,12 +1,12 @@
 // Reglas del juego como funciones puras: sin Firebase, sin React, sin reloj.
 // La pantalla grande es la única que las ejecuta y escribe el resultado.
-import { PUNTOS, POSTURAS } from './config.js'
+import { CATEGORIAS_EFECTO, LEMA_EFECTO, PUNTOS, RETOS } from './config.js'
 
 export const FASES = {
   SALA: 'sala',
   RULETA_PERSONA: 'ruleta_persona',
   RULETA_FICHA: 'ruleta_ficha',
-  RULETA_POSTURA: 'ruleta_postura',
+  RULETA_RETO: 'ruleta_reto',
   IMPRESION: 'impresion',
   ARGUMENTO: 'argumento',
   VOTO: 'voto',
@@ -18,7 +18,7 @@ const SECUENCIA = [
   FASES.SALA,
   FASES.RULETA_PERSONA,
   FASES.RULETA_FICHA,
-  FASES.RULETA_POSTURA,
+  FASES.RULETA_RETO,
   FASES.IMPRESION,
   FASES.ARGUMENTO,
   FASES.VOTO,
@@ -41,14 +41,39 @@ export function sortear(lista, rnd = Math.random) {
   return lista[Math.min(lista.length - 1, Math.floor(rnd() * lista.length))]
 }
 
-export function sortearPostura(rnd = Math.random) {
-  const r = rnd()
+/** Sorteo con pesos: `pesos` es { valor: peso }; los pesos no tienen que sumar 100. */
+export function sortearConPesos(pesos, rnd = Math.random) {
+  const entradas = Object.entries(pesos).filter(([, p]) => p > 0)
+  const total = entradas.reduce((s, [, p]) => s + p, 0)
+  if (!total) return entradas[0]?.[0] ?? null
+  const r = rnd() * total
   let acumulado = 0
-  for (const p of POSTURAS) {
-    acumulado += p.peso
-    if (r < acumulado - 1e-9) return p.valor
+  for (const [v, p] of entradas) {
+    acumulado += p
+    if (r < acumulado - 1e-9) return v
   }
-  return POSTURAS[POSTURAS.length - 1].valor
+  return entradas[entradas.length - 1][0]
+}
+
+const PESOS_RETO = Object.fromEntries(RETOS.map((r) => [r.valor, r.peso]))
+
+/** Ruleta 3: aplicala | defiende | ataca | elige. */
+export const sortearReto = (rnd = Math.random, pesos = PESOS_RETO) => sortearConPesos(pesos, rnd)
+
+/** "Tú eliges" sin elección a tiempo: sorteo entre los otros tres con sus pesos relativos. */
+export function sortearSinElegir(rnd = Math.random, pesos = PESOS_RETO) {
+  return sortearConPesos(Object.fromEntries(Object.entries(pesos).filter(([v]) => v !== 'elige')), rnd)
+}
+
+/** Postura que se mide para la persuasión: Aplícala cuenta como Defiende. */
+export const posturaDe = (reto) => (reto === 'ataca' ? 'no' : 'si')
+
+/** Título, lema y guion de 3 pasos para mostrar en pantalla. */
+export function textoReto(reto, categoria) {
+  const r = RETOS.find((x) => x.valor === reto)
+  if (!r) return null
+  const lema = CATEGORIAS_EFECTO.includes(categoria) ? LEMA_EFECTO[reto] ?? null : null
+  return { titulo: r.texto, lema, pasos: r.pasos }
 }
 
 function barajar(lista, rnd) {
@@ -60,13 +85,34 @@ function barajar(lista, rnd) {
   return a
 }
 
-/** Reparte 2 fichas por persona, sin repetir. Quien no alcanza queda fuera del resultado. */
-export function repartir(libres, personas, rnd = Math.random) {
+/**
+ * Reparte 2 fichas por persona, sin repetir. Quien no alcanza queda sin fichas.
+ * `info` (opcional) es { n: { categoria, nivel } }: la segunda ficha de cada persona se busca,
+ * en lo posible, de otra categoría y otro nivel que la primera.
+ */
+export function repartir(libres, personas, rnd = Math.random, info = {}) {
   const mazo = barajar(libres, rnd)
   const reparto = {}
+  const distinta = (a, b, campo) => {
+    const x = info[a]?.[campo]
+    const y = info[b]?.[campo]
+    return x == null || y == null || x !== y
+  }
   for (const p of personas) {
     if (mazo.length < 2) break
-    reparto[p] = [mazo.shift(), mazo.shift()]
+    const primera = mazo.shift()
+    const criterios = [
+      (n) => distinta(primera, n, 'categoria') && distinta(primera, n, 'nivel'),
+      (n) => distinta(primera, n, 'categoria'),
+      (n) => distinta(primera, n, 'nivel'),
+      () => true,
+    ]
+    let i = -1
+    for (const ok of criterios) {
+      i = mazo.findIndex(ok)
+      if (i >= 0) break
+    }
+    reparto[p] = [primera, mazo.splice(i, 1)[0]]
   }
   return reparto
 }
@@ -92,16 +138,25 @@ const impresionCompleta = (i) =>
 const votoCompleto = (v) => !!v && !!v.sirve && Number.isFinite(v.nota)
 const reacciono = (s) => !!s && (s.movio || (s.reacciones ?? 0) > 0)
 
+/** ¿El turno es contracorriente? Solo Defiende/Ataca contra el veredicto, nunca Debatida. */
+export function esContracorriente(reto, nivel) {
+  return (reto === 'ataca' && nivel === 'Respaldada') || (reto === 'defiende' && nivel === 'Poco respaldada')
+}
+
 /**
  * Resultado de un turno. Todos los mapas van indexados por personaId.
- * impresiones: { conoce: bool, util: 'si'|'no'|'ni', prediccion: 'si'|'no' }
- * votos: { sirve: 'si'|'no', nota: 1..5 }
+ * reto: el reto efectivo (aplicala | defiende | ataca). nivel: la evidencia real de la ficha.
+ * impresiones: { conoce: bool, util: 'si'|'no'|'ni', prediccion: nivel de evidencia }
+ *   (el orador también responde la impresión: suma por ella y por su predicción)
+ * votos: { sirve: 'si'|'no', nota: 1..5 } (el orador no vota)
  * sentimientos: { movio: bool, reacciones: número total, fuego: número }
  */
-export function calcularTurno({ postura, oradorId, impresiones, votos, sentimientos }) {
+export function calcularTurno({ reto, nivel, oradorId, impresiones, votos, sentimientos, puntos = PUNTOS }) {
+  const P = { ...PUNTOS, ...puntos }
   const sinOrador = (mapa) => Object.entries(mapa || {}).filter(([id]) => id !== oradorId)
   const votosValidos = sinOrador(votos).filter(([, v]) => votoCompleto(v))
-  const imps = Object.fromEntries(sinOrador(impresiones).filter(([, i]) => impresionCompleta(i)))
+  const todasImps = Object.fromEntries(Object.entries(impresiones || {}).filter(([, i]) => impresionCompleta(i)))
+  const imps = Object.fromEntries(Object.entries(todasImps).filter(([id]) => id !== oradorId))
 
   const votantes = votosValidos.length
   const si = votosValidos.filter(([, v]) => v.sirve === 'si').length
@@ -109,9 +164,9 @@ export function calcularTurno({ postura, oradorId, impresiones, votos, sentimien
   const notaPromedio = votantes
     ? Math.round((votosValidos.reduce((s, [, v]) => s + v.nota, 0) / votantes) * 10) / 10
     : null
-  const mayoriaSi = !votantes || si * 2 === votantes ? null : si * 2 > votantes
 
-  const objetivo = postura === 'ataca' ? 'no' : 'si'
+  // Persuadibles: no estaban en la postura defendida (estaban en la contraria o en "Ni idea").
+  const objetivo = posturaDe(reto)
   const conAmbas = votosValidos.filter(([id]) => imps[id])
   const fuera = conAmbas.filter(([id]) => imps[id].util !== objetivo)
   const persuadidos = fuera.filter(([, v]) => v.sirve === objetivo).map(([id]) => id)
@@ -120,29 +175,34 @@ export function calcularTurno({ postura, oradorId, impresiones, votos, sentimien
     .map(([id]) => id)
   const base = fuera.length
   const pctPersuadido = base ? Math.round((persuadidos.length / base) * 100) : null
+  const pctPersuadibles = votantes ? Math.round((base / votantes) * 100) : null
+  const persuasionFija = votantes > 0 && pctPersuadibles < P.umbralPersuadibles
 
-  const aciertos =
-    mayoriaSi === null
-      ? []
-      : Object.entries(imps)
-          .filter(([id, i]) => votos?.[id] && i.prediccion === (mayoriaSi ? 'si' : 'no'))
-          .map(([id]) => id)
+  // Predicción de evidencia: se compara con la base de datos, no con la sala.
+  const predijeron = Object.keys(todasImps)
+  const aciertos = nivel ? predijeron.filter((id) => todasImps[id].prediccion === nivel) : []
+
+  const contracorriente = esContracorriente(reto, nivel) && (notaPromedio ?? 0) >= P.contracorrienteNota
 
   const puntosTurno = {}
   const sumar = (id, campo, n) => {
     puntosTurno[id] ??= { participacion: 0, prediccion: 0, argumento: 0 }
     puntosTurno[id][campo] += n
   }
-  for (const id of Object.keys(imps)) sumar(id, 'participacion', PUNTOS.impresion)
-  for (const [id, s] of sinOrador(sentimientos)) if (reacciono(s)) sumar(id, 'participacion', PUNTOS.reaccion)
-  for (const [id] of votosValidos) sumar(id, 'participacion', PUNTOS.voto)
-  for (const id of aciertos) sumar(id, 'prediccion', PUNTOS.prediccion)
+  for (const id of predijeron) sumar(id, 'participacion', P.impresion)
+  for (const [id, s] of sinOrador(sentimientos)) if (reacciono(s)) sumar(id, 'participacion', P.reaccion)
+  for (const [id] of votosValidos) sumar(id, 'participacion', P.voto)
+  for (const id of aciertos) sumar(id, 'prediccion', P.prediccion)
+  const puntosPersuasion = persuasionFija
+    ? P.persuasionFija
+    : Math.min(P.oradorPersuasionMax, Math.floor((pctPersuadido ?? 0) / 10) * P.oradorPorDiezPct)
   sumar(
     oradorId,
     'argumento',
-    PUNTOS.oradorBase +
-      Math.round((notaPromedio ?? 0) * PUNTOS.oradorPorNota) +
-      Math.floor((pctPersuadido ?? 0) / 10) * PUNTOS.oradorPorDiezPct,
+    P.oradorBase +
+      Math.round((notaPromedio ?? 0) * P.oradorPorNota) +
+      puntosPersuasion +
+      (contracorriente ? P.contracorriente : 0),
   )
 
   const fuegos = Object.values(sentimientos || {}).reduce((s, x) => s + (x?.fuego ?? 0), 0)
@@ -152,11 +212,15 @@ export function calcularTurno({ postura, oradorId, impresiones, votos, sentimien
     votantes,
     pctSi,
     notaPromedio,
-    mayoriaSi,
     base,
     persuadidos,
     pctPersuadido,
+    pctPersuadibles,
+    persuasionFija,
+    puntosPersuasion,
+    contracorriente,
     enContra,
+    predijeron: predijeron.length,
     aciertos,
     fuegos,
     pctConoce: Object.keys(imps).length ? Math.round((conocen / Object.keys(imps).length) * 100) : null,
@@ -166,14 +230,16 @@ export function calcularTurno({ postura, oradorId, impresiones, votos, sentimien
   }
 }
 
-const vacio = () => ({ total: 0, participacion: 0, prediccion: 0, argumento: 0, rachas: 0, racha: 0 })
+const vacio = () => ({ total: 0, participacion: 0, prediccion: 0, argumento: 0, rachas: 0, racha: 0, aciertos: 0 })
 
 /**
  * Suma un turno al marcador (devuelve uno nuevo). La racha avanza con impresión y voto
  * completos; el orador la conserva tal cual; cualquier otro que no complete la pierde.
  */
-export function aplicarTurno(marcador, calculo, presentes = []) {
+export function aplicarTurno(marcador, calculo, presentes = [], puntos = PUNTOS) {
+  const P = { ...PUNTOS, ...puntos }
   const m = Object.fromEntries(Object.entries(marcador).map(([id, v]) => [id, { ...v }]))
+  const acerto = new Set(calculo.aciertos)
   const ids = new Set([...Object.keys(m), ...presentes, ...Object.keys(calculo.puntosTurno)])
   const completos = new Set(calculo.completos)
   for (const id of ids) {
@@ -185,12 +251,13 @@ export function aplicarTurno(marcador, calculo, presentes = []) {
       fila.argumento += p.argumento
       fila.total += p.participacion + p.prediccion + p.argumento
     }
+    if (acerto.has(id)) fila.aciertos = (fila.aciertos || 0) + 1
     if (id === calculo.oradorId) continue
     if (completos.has(id)) {
       fila.racha += 1
-      if (fila.racha % PUNTOS.rachaCada === 0) {
-        fila.rachas += PUNTOS.racha
-        fila.total += PUNTOS.racha
+      if (fila.racha % P.rachaCada === 0) {
+        fila.rachas += P.racha
+        fila.total += P.racha
       }
     } else {
       fila.racha = 0

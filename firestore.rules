@@ -74,7 +74,8 @@ service cloud.firestore {
         && id == string(request.resource.data.generacion) + '_' + string(request.resource.data.turno)
                  + '_' + request.resource.data.fase + '_' + request.resource.data.personaId
         && request.auth.uid in get(/databases/$(database)/documents/personas/$(request.resource.data.personaId)).data.uids
-        && request.resource.data.personaId != estado().oradorId
+        // El orador también da su primera impresión (y predicción), pero no vota su turno.
+        && (request.resource.data.personaId != estado().oradorId || request.resource.data.fase == 'impresion')
         && request.resource.data.fase == estado().fase
         && request.resource.data.turno == estado().turno
         && request.resource.data.generacion == estado().generacion
@@ -88,14 +89,14 @@ service cloud.firestore {
       allow write: if autenticado() && uid == request.auth.uid;
     }
 
-    // "Tú eliges": solo el orador, solo durante la ruleta de postura, una vez.
-    match /postura/{id} {
+    // "Tú eliges": solo el orador, solo durante la ruleta de reto, una vez.
+    match /reto/{id} {
       allow read: if autenticado();
       allow create: if autenticado()
         && request.auth.uid in estado().oradorUids
-        && estado().fase == 'ruleta_postura'
+        && estado().fase == 'ruleta_reto'
         && id == string(estado().generacion) + '_' + string(estado().turno)
-        && request.resource.data.eleccion in ['defiende', 'ataca'];
+        && request.resource.data.eleccion in ['aplicala', 'defiende', 'ataca'];
     }
   }
 }

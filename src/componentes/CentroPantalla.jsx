@@ -1,11 +1,11 @@
 import { QRCodeSVG } from 'qrcode.react'
-import { FASES } from '../lib/juego'
-import { REACCIONES } from '../lib/config'
+import { FASES, textoReto } from '../lib/juego'
+import { NIVELES_EVIDENCIA, REACCIONES } from '../lib/config'
 import Crono from './Crono'
 import Ruleta from './Ruleta'
 import Podio from './Podio'
 
-const POSTURA_TXT = { defiende: 'Defiende', ataca: 'Ataca', elige: 'Tú eliges' }
+const RETO_TXT = { aplicala: 'Aplícala', defiende: 'Defiende', ataca: 'Ataca', elige: 'Tú eliges' }
 const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0)
 
 export default function CentroPantalla({ estado, fichas, restante, respuestas, sentimientos, personas, presentes, urlSala }) {
@@ -57,7 +57,7 @@ export default function CentroPantalla({ estado, fichas, restante, respuestas, s
     )
   }
 
-  if (fase === FASES.RULETA_POSTURA)
+  if (fase === FASES.RULETA_RETO)
     return (
       <div className="centro-ruleta">
         <p className="centro-orador">
@@ -65,19 +65,19 @@ export default function CentroPantalla({ estado, fichas, restante, respuestas, s
         </p>
         <Ruleta
           key={`s${estado.turno}`}
-          titulo="¿Qué postura toma?"
-          opciones={['Defiende', 'Ataca', 'Tú eliges']}
-          ganador={POSTURA_TXT[estado.posturaSorteo]}
+          titulo="¿Qué reto le toca?"
+          opciones={['Aplícala', 'Defiende', 'Ataca', 'Tú eliges']}
+          ganador={RETO_TXT[estado.retoSorteo]}
           duracionMs={3200}
         />
-        {estado.posturaSorteo === 'elige' && (
+        {estado.retoSorteo === 'elige' && (
           <div className="eligiendo">
-            {estado.postura ? (
-              <p className={`postura grande ${estado.postura}`}>{POSTURA_TXT[estado.postura]}</p>
+            {estado.reto ? (
+              <p className={`postura grande ${estado.reto}`}>{RETO_TXT[estado.reto]}</p>
             ) : (
               <>
                 <Crono restante={restante} total={estado.duracion} grande />
-                <p>{estado.oradorNombre} está eligiendo desde su celular…</p>
+                <p>{estado.oradorNombre} está eligiendo desde su celular: Aplícala, Defiende o Ataca…</p>
               </>
             )}
           </div>
@@ -88,7 +88,12 @@ export default function CentroPantalla({ estado, fichas, restante, respuestas, s
   return (
     <div className="centro-turno">
       <TarjetaFicha estado={estado} restante={restante} />
-      {fase === FASES.IMPRESION && <Impresion respuestas={respuestas} presentes={presentes} />}
+      {fase === FASES.IMPRESION && (
+        <div className="impresion-y-guion">
+          <Guion estado={estado} />
+          <Impresion respuestas={respuestas} presentes={presentes} />
+        </div>
+      )}
       {fase === FASES.ARGUMENTO && <Argumento sentimientos={sentimientos} personas={personas} />}
       {fase === FASES.VOTO && <Votando respuestas={respuestas} presentes={presentes} />}
       {fase === FASES.RESULTADO && <Resultado estado={estado} />}
@@ -96,23 +101,62 @@ export default function CentroPantalla({ estado, fichas, restante, respuestas, s
   )
 }
 
-function TarjetaFicha({ estado, restante }) {
-  const conCrono = [FASES.IMPRESION, FASES.ARGUMENTO, FASES.VOTO].includes(estado.fase)
+export function Reto({ estado, grande }) {
+  if (!estado.reto) return null
+  const t = textoReto(estado.reto, estado.ficha?.categoria)
   return (
-    <div className="tarjeta-ficha">
+    <span className={`postura ${estado.reto} ${grande ? 'grande' : ''}`}>
+      {t.titulo}
+      {t.lema && <span className="reto-lema"> · {t.lema}</span>}
+    </span>
+  )
+}
+
+function Guion({ estado }) {
+  const t = textoReto(estado.reto, estado.ficha?.categoria)
+  if (!t) return null
+  return (
+    <div className={`guion ${estado.reto}`}>
+      <p className="guion-titulo">
+        Guion de {estado.oradorNombre}: <strong>{t.titulo}</strong>
+        {t.lema && <em> ({t.lema})</em>}
+      </p>
+      <ol>
+        {t.pasos.map((p) => (
+          <li key={p}>{p}</li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
+function TarjetaFicha({ estado, restante }) {
+  const conCrono = [FASES.IMPRESION, FASES.ARGUMENTO, FASES.VOTO, FASES.RESULTADO].includes(estado.fase)
+  const enResultado = estado.fase === FASES.RESULTADO
+  return (
+    <div className={`tarjeta-ficha ${enResultado ? 'compacta' : ''}`}>
       <div className="tf-texto">
         <p className="tf-orador">
           {estado.oradorNombre}
-          {estado.postura && <span className={`postura ${estado.postura}`}>{POSTURA_TXT[estado.postura]}</span>}
+          <Reto estado={estado} />
         </p>
         <p className="tf-nombre">{estado.ficha?.nombre}</p>
         <p className="tf-cat">{estado.ficha?.categoria}</p>
-        {estado.fase !== FASES.RESULTADO && <p className="tf-desc">{estado.ficha?.descripcion}</p>}
+        {!enResultado && (
+          <>
+            <p className="tf-desc">{estado.ficha?.que_es ?? estado.ficha?.descripcion}</p>
+            {estado.ficha?.ejemplo && (
+              <p className="tf-ejemplo">
+                <strong>Ejemplo:</strong> {estado.ficha.ejemplo}
+              </p>
+            )}
+          </>
+        )}
       </div>
       {conCrono && (
         <div className="tf-crono">
-          <Crono restante={restante} total={estado.duracion} grande />
-          {restante == null && <p className="ayuda">Esperando que el anfitrión inicie el tiempo</p>}
+          <Crono restante={restante} total={estado.duracion} grande={!enResultado} />
+          {restante == null && !enResultado && <p className="ayuda">Esperando que el anfitrión inicie el tiempo</p>}
         </div>
       )}
     </div>
@@ -157,8 +201,14 @@ function Impresion({ respuestas, presentes }) {
         />
       </div>
       <div className="medidor">
-        <p>Predicen que a la mayoría…</p>
-        <Barra partes={[{ txt: 'Le servirá', n: c('prediccion', 'si'), clase: 'si' }, { txt: 'No', n: c('prediccion', 'no'), clase: 'no' }]} />
+        <p>¿Qué nivel de evidencia predicen?</p>
+        <Barra
+          partes={[
+            { txt: 'Respaldada', n: c('prediccion', 'Respaldada'), clase: 'si' },
+            { txt: 'Debatida', n: c('prediccion', 'Debatida'), clase: 'ni' },
+            { txt: 'Poco respaldada', n: c('prediccion', 'Poco respaldada'), clase: 'no' },
+          ]}
+        />
       </div>
     </div>
   )
@@ -208,13 +258,45 @@ function Votando({ respuestas, presentes }) {
   )
 }
 
+const CLASE_NIVEL = { Respaldada: 'si', Debatida: 'ni', 'Poco respaldada': 'no' }
+
 function Resultado({ estado }) {
   const r = estado.resultado
   if (!r) return null
   if (r.saltado) return <p className="grande centro">Turno saltado. {estado.oradorNombre} sigue pendiente.</p>
   const icono = { si: '👍', no: '👎', ni: '🤷' }
+  const rev = r.revelacion || {}
+  const ayuda = NIVELES_EVIDENCIA.find((n) => n.valor === rev.nivel)?.ayuda
   return (
     <div className="resultado">
+      <div className="revelacion">
+        <div className={`rev-nivel ${CLASE_NIVEL[rev.nivel] ?? ''}`}>
+          <span className="rev-etq">Evidencia</span>
+          <span className="rev-valor">{rev.nivel ?? '—'}</span>
+          {ayuda && <span className="rev-ayuda">{ayuda}</span>}
+          <span className="rev-aciertos">
+            🎯 {r.aciertos} de {r.predijeron} lo acertaron
+          </span>
+          {r.aciertosNombres?.length > 0 && <span className="rev-nombres">{r.aciertosNombres.join(' · ')}</span>}
+        </div>
+        <div className="rev-textos">
+          {rev.texto && (
+            <p>
+              <strong>Qué dice la evidencia.</strong> {rev.texto}
+            </p>
+          )}
+          {rev.mito && (
+            <p>
+              <strong>Mito y límites.</strong> {rev.mito}
+            </p>
+          )}
+          {rev.origen && (
+            <p className="rev-origen">
+              <strong>Origen.</strong> {rev.origen}
+            </p>
+          )}
+        </div>
+      </div>
       <div className="cifras grandes">
         <div>
           <span className="cifra">{r.pctSi ?? '—'}%</span>
@@ -229,15 +311,22 @@ function Resultado({ estado }) {
             {r.persuadidos}
             <small>/{r.base}</small>
           </span>
-          <span className="cifra-txt">persuadidos {r.pctPersuadido != null ? `(${r.pctPersuadido}%)` : ''}</span>
+          <span className="cifra-txt">
+            {r.persuasionFija
+              ? `pocos persuadibles (${r.pctPersuadibles}%): +${r.puntosPersuasion} fijos`
+              : `cambiaron de opinión ${r.pctPersuadido != null ? `(${r.pctPersuadido}%)` : ''}`}
+          </span>
         </div>
         <div>
-          <span className="cifra">{r.aciertos}</span>
-          <span className="cifra-txt">acertaron la predicción</span>
+          <span className="cifra">{r.fuegos}</span>
+          <span className="cifra-txt">🔥 buen punto</span>
         </div>
         <div className="destacada">
           <span className="cifra">+{r.puntosOrador}</span>
-          <span className="cifra-txt">pts para {estado.oradorNombre}</span>
+          <span className="cifra-txt">
+            pts para {estado.oradorNombre}
+            {r.contracorriente ? ' · ⚡ contracorriente' : ''}
+          </span>
         </div>
       </div>
       <ul className="votos">
@@ -253,7 +342,6 @@ function Resultado({ estado }) {
           </li>
         ))}
       </ul>
-      {r.enContra > 0 && <p className="ayuda">{r.enContra} cambiaron en contra de la postura (no resta puntos).</p>}
     </div>
   )
 }

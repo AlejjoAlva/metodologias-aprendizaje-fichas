@@ -1516,3 +1516,177 @@ button {
 .pre {
   white-space: pre-line;
 }
+
+/* Reto, guion y revelación de la evidencia */
+.postura.aplicala {
+  background: var(--acento);
+}
+
+.reto-lema {
+  font-weight: 500;
+}
+
+.impresion-y-guion {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  gap: 2vw;
+  margin-top: auto;
+  align-items: end;
+}
+
+.guion {
+  background: var(--papel);
+  border-left: 0.6vh solid var(--acento);
+  border-radius: 10px;
+  padding: 1.4vh 1.2vw;
+  font-size: 2.3vh;
+}
+
+.guion.defiende {
+  border-color: var(--si);
+}
+
+.guion.ataca {
+  border-color: var(--no);
+}
+
+.guion-titulo {
+  color: var(--tinta-2);
+  margin-bottom: 0.8vh;
+}
+
+.guion ol {
+  margin: 0;
+  padding-left: 1.3em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6vh;
+  font-weight: 600;
+}
+
+.tf-ejemplo {
+  font-size: 2.4vh;
+  line-height: 1.35;
+  margin-top: 1vh;
+  max-width: 64ch;
+  color: var(--tinta-2);
+}
+
+.tarjeta-ficha.compacta .tf-nombre {
+  font-size: 4.2vh;
+}
+
+.revelacion {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.6fr);
+  gap: 1.6vw;
+  align-items: stretch;
+}
+
+.rev-nivel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6vh;
+  padding: 1.6vh 1.2vw;
+  border-radius: var(--radio);
+  background: var(--ni-suave);
+  color: var(--ni);
+}
+
+.rev-nivel.si {
+  background: var(--si-suave);
+  color: var(--si);
+}
+
+.rev-nivel.no {
+  background: var(--no-suave);
+  color: var(--no);
+}
+
+.rev-etq {
+  font-size: 1.8vh;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+.rev-valor {
+  font-size: 6vh;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.rev-ayuda {
+  font-size: 2vh;
+}
+
+.rev-aciertos {
+  font-size: 2.4vh;
+  font-weight: 700;
+  color: var(--tinta);
+  margin-top: 0.6vh;
+}
+
+.rev-nombres {
+  font-size: 1.8vh;
+  color: var(--tinta-2);
+  line-height: 1.35;
+}
+
+.rev-textos {
+  display: flex;
+  flex-direction: column;
+  gap: 1vh;
+  font-size: 2.2vh;
+  line-height: 1.4;
+  overflow: hidden;
+}
+
+.rev-origen {
+  color: var(--tinta-2);
+  font-size: 1.9vh;
+}
+
+/* celular */
+.opciones.con-ayuda .opcion {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.15;
+}
+
+.opcion-ayuda {
+  font-size: 0.72rem;
+  font-weight: 400;
+  opacity: 0.8;
+}
+
+.guion-cel ol {
+  margin: 6px 0;
+  padding-left: 1.3em;
+  font-weight: 600;
+}
+
+.revelacion-cel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rev-valor-cel {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.rev-valor-cel.nivel-si {
+  color: var(--si);
+}
+
+.rev-valor-cel.nivel-ni {
+  color: var(--ni);
+}
+
+.rev-valor-cel.nivel-no {
+  color: var(--no);
+}

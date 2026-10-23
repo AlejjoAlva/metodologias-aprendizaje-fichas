@@ -12,7 +12,7 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore'
-import { DURACION } from './config.js'
+import { ajustesDe } from './config.js'
 import {
   FASES,
   aplicarTurno,
@@ -21,7 +21,8 @@ import {
   ranking,
   repartir,
   sortear,
-  sortearPostura,
+  sortearReto,
+  sortearSinElegir,
 } from './juego.js'
 
 const ESTADO = 'juego/estado'
@@ -43,12 +44,13 @@ export function estadoInicial(generacion = 0, codigo = codigoSala()) {
     candidatasFicha: [],
     fichaId: null,
     ficha: null,
-    posturaSorteo: null,
-    postura: null,
+    retoSorteo: null, // lo que salió en la ruleta (puede ser "elige")
+    reto: null, // el reto efectivo: aplicala | defiende | ataca
     cronoInicio: null,
     duracion: 0,
     resultado: null,
     marcador: {},
+    ajustes: null,
     top: [],
     eventos: [],
     repartoVersion: 0,
@@ -119,7 +121,7 @@ export async function migrarFichasViejas(db, fichas) {
 }
 
 /** Reparte 2 fichas a cada persona conectada y arranca la partida. */
-export async function iniciarPartida(db, estado, { fichas, personas, conectados, rnd = Math.random }) {
+export async function iniciarPartida(db, estado, { fichas, personas, conectados, niveles = {}, rnd = Math.random }) {
   const presentes = personas.filter((p) => !p.ausente && conectados.has(p.id)).map((p) => p.id)
   const invalidas = fichas.filter((f) => f.estado === 'libre' && f.invalida)
   if (invalidas.length)
@@ -127,7 +129,7 @@ export async function iniciarPartida(db, estado, { fichas, personas, conectados,
       `Hay fichas sin nivel de evidencia válido: ${invalidas.map((f) => f.nombre).join(', ')}. Corrígelas o exclúyelas.`,
     )
   const libres = fichas.filter((f) => f.estado === 'libre').map((f) => f.n)
-  const reparto = repartir(libres, presentes, rnd)
+  const reparto = repartir(libres, presentes, rnd, infoReparto(fichas, niveles))
   const batch = writeBatch(db)
   for (const [pid, ns] of Object.entries(reparto))
     for (const n of ns) batch.update(doc(db, 'fichas', String(n)), { dueno: pid, estado: 'repartida' })
@@ -140,10 +142,13 @@ export async function iniciarPartida(db, estado, { fichas, personas, conectados,
   return reparto
 }
 
+const infoReparto = (fichas, niveles) =>
+  Object.fromEntries(fichas.map((f) => [f.n, { categoria: f.categoria, nivel: niveles[f.n] }]))
+
 /** Fichas para quien entra tarde. Devuelve los números asignados o [] si no alcanzan. */
-export async function asignarFichas(db, estado, persona, fichas, rnd = Math.random) {
+export async function asignarFichas(db, estado, persona, fichas, niveles = {}, rnd = Math.random) {
   const libres = fichas.filter((f) => f.estado === 'libre').map((f) => f.n)
-  const r = repartir(libres, [persona.id], rnd)[persona.id]
+  const r = repartir(libres, [persona.id], rnd, infoReparto(fichas, niveles))[persona.id]
   if (!r) return []
   const batch = writeBatch(db)
   for (const n of r) batch.update(doc(db, 'fichas', String(n)), { dueno: persona.id, estado: 'repartida' })
@@ -171,8 +176,8 @@ export async function girarPersona(db, estado, { personas, conectados, fichas, e
     candidatasFicha: candidatas,
     fichaId: null,
     ficha: null,
-    posturaSorteo: null,
-    postura: null,
+    retoSorteo: null,
+    reto: null,
     cronoInicio: null,
     duracion: 0,
     resultado: null,
@@ -203,31 +208,31 @@ export async function girarFicha(db, estado, fichas, rnd = Math.random) {
   await batch.commit()
 }
 
-/** Ruleta 3. Con "Tú eliges" arranca la ventana de 10 s del orador. */
-export async function girarPostura(db, estado, rnd = Math.random) {
-  const s = sortearPostura(rnd)
+const TEXTO_RETO = { aplicala: 'Aplícala', defiende: 'Defiende', ataca: 'Ataca', elige: 'Tú eliges' }
+
+/** Ruleta 3: el reto. Con "Tú eliges" arranca la ventana de 10 s del orador. */
+export async function girarReto(db, estado, rnd = Math.random) {
+  const { pesosReto, duracion } = ajustesDe(estado)
+  const s = sortearReto(rnd, pesosReto)
   await updateDoc(doc(db, ESTADO), {
-    fase: FASES.RULETA_POSTURA,
-    posturaSorteo: s,
-    postura: s === 'elige' ? null : s,
+    fase: FASES.RULETA_RETO,
+    retoSorteo: s,
+    reto: s === 'elige' ? null : s,
     cronoInicio: s === 'elige' ? serverTimestamp() : null,
-    duracion: s === 'elige' ? DURACION.elige : 0,
-    eventos: evento(estado, s === 'elige' ? `🎲 ${estado.oradorNombre} elige su postura` : `🎲 Postura: ${s === 'defiende' ? 'Defiende' : 'Ataca'}`),
+    duracion: s === 'elige' ? duracion.elige : 0,
+    eventos: evento(estado, s === 'elige' ? `🎲 ${estado.oradorNombre} elige su reto` : `🎲 Reto: ${TEXTO_RETO[s]}`),
   })
 }
 
-/** Cierra "Tú eliges": lo que eligió el orador o, si no eligió, un sorteo entre defiende y ataca. */
+/** Cierra "Tú eliges": lo que eligió el orador o, si no eligió, un sorteo entre los otros tres. */
 export async function resolverEleccion(db, estado, rnd = Math.random) {
-  const snap = await getDoc(doc(db, 'postura', `${estado.generacion}_${estado.turno}`))
-  const eleccion = snap.exists() ? snap.data().eleccion : rnd() < 0.5 ? 'defiende' : 'ataca'
+  const snap = await getDoc(doc(db, 'reto', `${estado.generacion}_${estado.turno}`))
+  const eleccion = snap.exists() ? snap.data().eleccion : sortearSinElegir(rnd, ajustesDe(estado).pesosReto)
   await updateDoc(doc(db, ESTADO), {
-    postura: eleccion,
+    reto: eleccion,
     cronoInicio: null,
     duracion: 0,
-    eventos: evento(
-      estado,
-      `${snap.exists() ? '🗣️ Eligió' : '🎲 No eligió a tiempo; salió'}: ${eleccion === 'defiende' ? 'Defiende' : 'Ataca'}`,
-    ),
+    eventos: evento(estado, `${snap.exists() ? '🗣️ Eligió' : '🎲 No eligió a tiempo; salió'}: ${TEXTO_RETO[eleccion]}`),
   })
   return eleccion
 }
@@ -242,13 +247,16 @@ export async function pasarA(db, estado, fase) {
   await updateDoc(doc(db, ESTADO), {
     fase,
     cronoInicio: null,
-    duracion: DURACION[fase] || 0,
+    duracion: ajustesDe(estado).duracion[fase] || 0,
     eventos: texto ? evento(estado, texto) : estado.eventos,
   })
 }
 
 export async function iniciarCrono(db, estado) {
-  await updateDoc(doc(db, ESTADO), { cronoInicio: serverTimestamp(), duracion: DURACION[estado.fase] || estado.duracion })
+  await updateDoc(doc(db, ESTADO), {
+    cronoInicio: serverTimestamp(),
+    duracion: ajustesDe(estado).duracion[estado.fase] || estado.duracion,
+  })
 }
 
 const delTurno = (estado) => [
@@ -287,17 +295,31 @@ export function sentimientosValidos(lista, personas) {
   return out
 }
 
-/** Cierra el voto: calcula el turno, suma al marcador y revela el resultado. */
+/**
+ * Cierra el voto: lee la evidencia de la ficha (solo ahora), calcula el turno, suma al marcador y
+ * publica el resultado con la revelación en el turno y en el estado, a la vez para todos.
+ */
 export async function cerrarTurno(db, estado, { personas, conectados }) {
-  const [impresiones, votos, sentimientos] = await Promise.all([
+  const { puntos, duracion } = ajustesDe(estado)
+  const [impresiones, votos, sentimientos, evidenciaSnap] = await Promise.all([
     leerRespuestas(db, estado, FASES.IMPRESION),
     leerRespuestas(db, estado, FASES.VOTO),
     leerSentimientos(db, estado, personas),
+    estado.fichaId != null ? getDoc(doc(db, 'evidencia', String(estado.fichaId))) : null,
   ])
-  const postura = estado.postura === 'ataca' ? 'ataca' : 'defiende'
-  const calculo = calcularTurno({ postura, oradorId: estado.oradorId, impresiones, votos, sentimientos })
+  const evidencia = evidenciaSnap?.exists() ? evidenciaSnap.data() : {}
+  const reto = estado.reto || 'defiende'
+  const calculo = calcularTurno({
+    reto,
+    nivel: evidencia.nivel ?? null,
+    oradorId: estado.oradorId,
+    impresiones,
+    votos,
+    sentimientos,
+    puntos,
+  })
   const presentes = personas.filter((p) => !p.ausente && conectados.has(p.id)).map((p) => p.id)
-  const marcador = aplicarTurno(estado.marcador || {}, calculo, presentes)
+  const marcador = aplicarTurno(estado.marcador || {}, calculo, presentes, puntos)
   const nombre = Object.fromEntries(personas.map((p) => [p.id, p.nombre]))
   const persuadidos = new Set(calculo.persuadidos)
   const aciertos = new Set(calculo.aciertos)
@@ -318,19 +340,34 @@ export async function cerrarTurno(db, estado, { personas, conectados }) {
     }))
     .sort((a, b) => a.nombre.localeCompare(b.nombre))
 
+  const revelacion = {
+    nivel: evidencia.nivel ?? null,
+    texto: evidencia.texto ?? '',
+    mito: evidencia.mito ?? '',
+    origen: evidencia.origen ?? '',
+  }
   const resultado = {
+    retoSorteo: estado.retoSorteo ?? null,
+    reto,
+    revelacion,
+    predijeron: calculo.predijeron,
+    aciertos: calculo.aciertos.length,
+    aciertosNombres: calculo.aciertos.map((id) => nombre[id]).filter(Boolean),
+    oradorAcerto: aciertos.has(estado.oradorId),
     votantes: calculo.votantes,
     pctSi: calculo.pctSi,
     notaPromedio: calculo.notaPromedio,
-    mayoriaSi: calculo.mayoriaSi,
     base: calculo.base,
     pctPersuadido: calculo.pctPersuadido,
+    pctPersuadibles: calculo.pctPersuadibles,
+    persuasionFija: calculo.persuasionFija,
+    puntosPersuasion: calculo.puntosPersuasion,
+    contracorriente: calculo.contracorriente,
     persuadidos: calculo.persuadidos.length,
     enContra: calculo.enContra.length,
-    aciertos: calculo.aciertos.length,
     fuegos: calculo.fuegos,
     pctConoce: calculo.pctConoce,
-    puntosOrador: calculo.puntosTurno[estado.oradorId]?.argumento ?? 0,
+    puntosOrador: Object.values(calculo.puntosTurno[estado.oradorId] || {}).reduce((a, b) => a + b, 0),
     detalle,
   }
 
@@ -342,7 +379,10 @@ export async function cerrarTurno(db, estado, { personas, conectados }) {
     oradorNombre: estado.oradorNombre,
     fichaId: estado.fichaId,
     ficha: estado.ficha?.nombre ?? null,
-    postura,
+    categoria: estado.ficha?.categoria ?? null,
+    retoSorteo: estado.retoSorteo ?? null,
+    reto,
+    revelacion,
     resultado,
     puntosTurno: calculo.puntosTurno,
     creado: serverTimestamp(),
@@ -351,18 +391,23 @@ export async function cerrarTurno(db, estado, { personas, conectados }) {
   if (estado.fichaId != null) batch.update(doc(db, 'fichas', String(estado.fichaId)), { estado: 'jugada' })
   batch.update(doc(db, ESTADO), {
     fase: FASES.RESULTADO,
-    cronoInicio: null,
-    duracion: 0,
+    cronoInicio: serverTimestamp(),
+    duracion: duracion.resultado,
     resultado,
     marcador,
     top: topConNombres(marcador, nombre, 10),
     eventos: evento(
       estado,
-      `✅ «${estado.ficha?.nombre}»: ${calculo.pctSi ?? 0}% le sirve · ${estado.oradorNombre} +${resultado.puntosOrador} pts`,
+      `✅ «${estado.ficha?.nombre}» es ${revelacion.nivel ?? '¿?'} · ${calculo.pctSi ?? 0}% le sirve · ${estado.oradorNombre} +${resultado.puntosOrador} pts`,
     ),
   })
   await batch.commit()
   return { calculo, resultado, marcador }
+}
+
+/** Guarda los ajustes editables (puntos, pesos del reto, duraciones). */
+export async function guardarAjustes(db, ajustes) {
+  await updateDoc(doc(db, ESTADO), { ajustes })
 }
 
 export function topConNombres(marcador, nombre, n = 10) {

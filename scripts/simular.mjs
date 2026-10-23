@@ -9,13 +9,13 @@ import {
   signInAnonymously,
   signInWithEmailAndPassword,
 } from 'firebase/auth'
-import { connectFirestoreEmulator, doc, getDoc, getDocs, collection, getFirestore, terminate } from 'firebase/firestore'
+import { connectFirestoreEmulator, doc, getDoc, getDocs, collection, getFirestore, terminate, updateDoc } from 'firebase/firestore'
 import { connectDatabaseEmulator, get, getDatabase, goOffline, ref } from 'firebase/database'
 import {
   cerrarTurno,
   girarFicha,
   girarPersona,
-  girarPostura,
+  girarReto,
   iniciarCrono,
   iniciarPartida,
   asignarFichas,
@@ -24,9 +24,12 @@ import {
   resolverEleccion,
   resolverReclamo,
   empezarDeCero,
+  excluirFicha,
+  leerNiveles,
+  reemplazarFichas,
 } from '../src/lib/acciones-pantalla.js'
 import {
-  elegirPostura,
+  elegirReto,
   enviarSentimiento,
   inscribirse,
   marcarPresencia,
@@ -95,12 +98,19 @@ async function contexto(host) {
   return { estado, personas, conectados, fichas }
 }
 
+const NIVELES = ['Respaldada', 'Debatida', 'Poco respaldada']
 const fichasPrueba = Array.from({ length: 70 }, (_, i) => ({
   n: i + 1,
   nombre: `Ficha de prueba ${i + 1}`,
-  descripcion: 'Descripción de prueba',
-  categoria: ['Memoria', 'Organización', 'Comprensión'][i % 3],
+  categoria: ['Memoria', 'Organización', 'Comprensión', 'Mitos y conceptos a desmentir'][i % 4],
+  que_es: 'Qué es, de prueba',
+  ejemplo: 'Ejemplo de prueba',
+  como_se_aplica: 'Paso 1\nPaso 2',
+  evidencia: { nivel: NIVELES[Math.floor(i / 4) % 3], texto: 'Texto', mito: 'Mito', origen: 'Origen' },
+  avisos: [],
+  invalida: false,
 }))
+const nivelDe = Object.fromEntries(fichasPrueba.map((f) => [f.n, f.evidencia.nivel]))
 
 async function main() {
   console.log(`Simulación: ${N} celulares, ${TURNOS} turnos, ${PROD ? 'PRODUCCIÓN' : 'emulador'}`)
@@ -113,8 +123,10 @@ async function main() {
   let estado = await prepararSala(host.db, fichasPrueba)
   if (estado.iniciada || estado.turno > 0) {
     // Base usada: empezar de cero sin borrar nada.
-    await empezarDeCero(host.db, estado, fichasPrueba)
+    const viejas = (await getDocs(collection(host.db, 'fichas'))).docs.map((d) => d.data())
+    await empezarDeCero(host.db, estado, viejas.filter((f) => f.estado !== 'retirada'))
     estado = await leerEstado(host.db)
+    await reemplazarFichas(host.db, estado, fichasPrueba, viejas)
   }
 
   // Celulares entrando a la vez.
@@ -135,10 +147,37 @@ async function main() {
 
   let ctx = await contexto(host)
   ok(ctx.conectados.size === N, `presencia: ${ctx.conectados.size}/${N} conectados`)
-  await iniciarPartida(host.db, ctx.estado, ctx)
+  // Una ficha inválida bloquea el inicio hasta excluirla.
+  await updateDoc(doc(host.db, 'fichas', '70'), { invalida: true })
+  ctx = await contexto(host)
+  let bloqueo = false
+  try {
+    await iniciarPartida(host.db, ctx.estado, ctx)
+  } catch (e) {
+    bloqueo = /evidencia/.test(e.message)
+  }
+  ok(bloqueo, 'no se puede iniciar con una ficha sin nivel válido')
+  await excluirFicha(host.db, { n: 70 }, true)
+  ctx = await contexto(host)
+  await iniciarPartida(host.db, ctx.estado, { ...ctx, niveles: await leerNiveles(host.db) })
   ctx = await contexto(host)
   const repartidas = ctx.fichas.filter((f) => f.dueno)
   ok(repartidas.length === N * 2, `reparto: ${repartidas.length} fichas para ${N} personas`)
+  ok(!repartidas.some((f) => f.n === 70), 'la ficha excluida no se reparte')
+  const manos = {}
+  for (const f of repartidas) (manos[f.dueno] ??= []).push(f)
+  const variadas = Object.values(manos).filter(([a, b]) => a.categoria !== b.categoria && nivelDe[a.n] !== nivelDe[b.n]).length
+  ok(variadas >= N * 0.8, `reparto variado: ${variadas}/${N} con categoría y nivel distintos`)
+  // Lo que ve un celular: ni la evidencia ni los niveles.
+  let espia = false
+  try {
+    await getDoc(doc(celulares[0].db, 'evidencia', '1'))
+    espia = true
+  } catch {
+    /* esperado */
+  }
+  const fichaCel = (await getDoc(doc(celulares[0].db, 'fichas', '1'))).data()
+  ok(!espia && !('evidencia' in fichaCel) && !('nivel' in fichaCel), 'el celular no puede leer la evidencia')
 
   // Llega tarde.
   const tarde = cliente('tarde')
@@ -175,14 +214,18 @@ async function main() {
     const orador = porId.get(e.oradorId)
     await girarFicha(host.db, e, ctx.fichas)
     e = await leerEstado(host.db)
-    await girarPostura(host.db, e)
+    // Turno 1 fuerza "Tú eliges" para probarlo.
+    await girarReto(host.db, e, t === 0 ? () => 0.99 : Math.random)
     e = await leerEstado(host.db)
-    if (e.posturaSorteo === 'elige') {
-      if (orador) await elegirPostura(orador.db, e, 'ataca')
+    if (e.retoSorteo === 'elige') {
+      if (orador) await elegirReto(orador.db, e, 'aplicala')
       await resolverEleccion(host.db, e)
       e = await leerEstado(host.db)
-      ok(!orador || e.postura === 'ataca', `turno ${t + 1}: "Tú eliges" respeta la elección`)
+      ok(!orador || e.reto === 'aplicala', `turno ${t + 1}: "Tú eliges" respeta la elección (Aplícala)`)
     }
+    ok(['aplicala', 'defiende', 'ataca'].includes(e.reto), `turno ${t + 1}: reto efectivo ${e.reto} (salió ${e.retoSorteo})`)
+    ok(Object.keys(e.ficha).every((k) => ['nombre', 'categoria', 'que_es', 'ejemplo', 'como_se_aplica'].includes(k)) && !e.resultado,
+      `turno ${t + 1}: el estado no lleva la evidencia antes del resultado`)
     await pasarA(host.db, e, FASES.IMPRESION)
     e = await leerEstado(host.db)
     await iniciarCrono(host.db, e)
@@ -192,7 +235,7 @@ async function main() {
     const impresiones = {}
     await Promise.all(
       publico.map(async (c) => {
-        const v = { conoce: Math.random() < 0.5, util: azar(['si', 'no', 'ni']), prediccion: azar(['si', 'no']) }
+        const v = { conoce: Math.random() < 0.5, util: azar(['si', 'no', 'ni']), prediccion: azar(NIVELES) }
         impresiones[c.personaId] = v
         await responder(c.db, c.uid, c.personaId, e, v)
       }),
@@ -205,15 +248,11 @@ async function main() {
       /* esperado */
     }
     ok(!doble, `turno ${t + 1}: la segunda respuesta se rechaza`)
-    let orVota = false
-    if (orador)
-      try {
-        await responder(orador.db, orador.uid, orador.personaId, e, impresiones[publico[0].personaId])
-        orVota = true
-      } catch {
-        /* esperado */
-      }
-    ok(!orVota, `turno ${t + 1}: el orador no puede votar su turno`)
+    if (orador) {
+      const v = { conoce: true, util: 'si', prediccion: nivelDe[e.fichaId] }
+      impresiones[orador.personaId] = v
+      await responder(orador.db, orador.uid, orador.personaId, e, v)
+    }
 
     await pasarA(host.db, e, FASES.ARGUMENTO)
     e = await leerEstado(host.db)
@@ -241,10 +280,21 @@ async function main() {
       }),
     )
 
+    let orVota = false
+    if (orador)
+      try {
+        await responder(orador.db, orador.uid, orador.personaId, e, { sirve: 'si', nota: 5 })
+        orVota = true
+      } catch {
+        /* esperado */
+      }
+    ok(!orVota, `turno ${t + 1}: el orador no puede votar su turno`)
+
     ctx = await contexto(host)
     const { resultado, marcador } = await cerrarTurno(host.db, e, ctx)
     const esperado = calcularTurno({
-      postura: e.postura === 'ataca' ? 'ataca' : 'defiende',
+      reto: e.reto,
+      nivel: nivelDe[e.fichaId],
       oradorId: e.oradorId,
       impresiones,
       votos,
@@ -253,7 +303,16 @@ async function main() {
     ok(resultado.votantes === publico.length, `turno ${t + 1}: ${resultado.votantes} votos contados de ${publico.length}`)
     ok(resultado.pctSi === esperado.pctSi && resultado.persuadidos === esperado.persuadidos.length,
       `turno ${t + 1}: resultado = cálculo independiente (${resultado.pctSi}% sí, ${resultado.persuadidos} persuadidos)`)
-    ok(resultado.puntosOrador === esperado.puntosTurno[e.oradorId].argumento, `turno ${t + 1}: orador +${resultado.puntosOrador}`)
+    const po = esperado.puntosTurno[e.oradorId]
+    ok(resultado.puntosOrador === po.argumento + po.participacion + po.prediccion, `turno ${t + 1}: orador +${resultado.puntosOrador}`)
+    ok(resultado.revelacion.nivel === nivelDe[e.fichaId] && resultado.aciertos === esperado.aciertos.length,
+      `turno ${t + 1}: revelación ${resultado.revelacion.nivel}, ${resultado.aciertos} aciertos contra la base`)
+    ok(!orador || resultado.oradorAcerto, `turno ${t + 1}: la predicción del orador cuenta`)
+    const turnoDoc = (await getDoc(doc(celulares[0].db, 'turnos', `${e.generacion}_${e.turno}`))).data()
+    ok(turnoDoc.reto === e.reto && turnoDoc.retoSorteo === e.retoSorteo && turnoDoc.revelacion.nivel === nivelDe[e.fichaId],
+      `turno ${t + 1}: el turno guarda reto que salió, reto efectivo y revelación`)
+    const eCel = (await getDoc(doc(celulares[0].db, 'juego/estado'))).data()
+    ok(eCel.resultado.revelacion.nivel === nivelDe[e.fichaId] && eCel.duracion === 30, `turno ${t + 1}: el celular recibe la revelación al abrir el Resultado (30 s)`)
     const f = (await getDoc(doc(host.db, 'fichas', String(e.fichaId)))).data()
     ok(f.estado === 'jugada', `turno ${t + 1}: la ficha queda jugada`)
     const total = Object.values(marcador).reduce((s, m) => s + m.total, 0)

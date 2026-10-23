@@ -17,7 +17,8 @@ import {
   cerrarTurno,
   girarFicha,
   girarPersona,
-  girarPostura,
+  girarReto,
+  leerNiveles,
   migrarFichasViejas,
   pasarA,
   prepararSala,
@@ -33,7 +34,7 @@ import ListaFichas from '../componentes/ListaFichas'
 import Controles from '../componentes/Controles'
 
 // Cuánto dura la animación de cada ruleta antes de pasar sola a la siguiente.
-const PAUSA_RULETA_MS = { [FASES.RULETA_PERSONA]: 6000, [FASES.RULETA_FICHA]: 5000, [FASES.RULETA_POSTURA]: 4500 }
+const PAUSA_RULETA_MS = { [FASES.RULETA_PERSONA]: 6000, [FASES.RULETA_FICHA]: 5000, [FASES.RULETA_RETO]: 4500 }
 // Margen tras llegar a cero antes de leer los votos (las reglas aceptan hasta 1 s de gracia).
 const MARGEN_CIERRE_MS = 1500
 
@@ -94,6 +95,9 @@ function Tablero() {
   const restante = useRestante(estado)
   const [fallo, setFallo] = useState(null)
   const hecho = useRef(new Set())
+  // Niveles de evidencia solo para repartir sin repetir nivel. Se leen al repartir y no se muestran.
+  const niveles = useRef(null)
+  const conNiveles = async () => (niveles.current ??= await leerNiveles(db).catch(() => ({})))
   const saltados = useRef([])
 
   // Persona conectada = alguno de sus uids tiene marca de presencia.
@@ -130,26 +134,26 @@ function Tablero() {
     let accion = null
     if (fase === FASES.RULETA_PERSONA && estado.oradorId)
       accion = [`ficha:${k}`, () => girarFicha(db, estado, fichas)]
-    else if (fase === FASES.RULETA_FICHA) accion = [`postura:${k}`, () => girarPostura(db, estado)]
-    else if (fase === FASES.RULETA_POSTURA && estado.postura)
+    else if (fase === FASES.RULETA_FICHA) accion = [`reto:${k}`, () => girarReto(db, estado)]
+    else if (fase === FASES.RULETA_RETO && estado.reto)
       accion = [`impresion:${k}`, () => pasarA(db, estado, FASES.IMPRESION)]
     if (!accion) return undefined
     const t = setTimeout(() => unaVez(...accion), PAUSA_RULETA_MS[fase])
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fase, estado?.turno, estado?.postura, estado?.oradorId, fichas.length])
+  }, [fase, estado?.turno, estado?.reto, estado?.oradorId, fichas.length])
 
   // Cronómetros: al llegar a cero la fase se cierra sola.
   useEffect(() => {
     if (!estado || restante !== 0) return undefined
     const k = `${estado.generacion}_${estado.turno}`
     let accion = null
-    if (fase === FASES.RULETA_POSTURA && !estado.postura) accion = [`elige:${k}`, () => resolverEleccion(db, estado)]
+    if (fase === FASES.RULETA_RETO && !estado.reto) accion = [`elige:${k}`, () => resolverEleccion(db, estado)]
     else if (fase === FASES.IMPRESION) accion = [`argumento:${k}`, () => pasarA(db, estado, FASES.ARGUMENTO)]
     else if (fase === FASES.ARGUMENTO) accion = [`voto:${k}`, () => pasarA(db, estado, FASES.VOTO)]
     else if (fase === FASES.VOTO) accion = [`cierre:${k}`, () => cerrarTurno(db, estado, ctx)]
     if (!accion) return undefined
-    const t = setTimeout(() => unaVez(...accion), fase === FASES.VOTO || !estado.postura ? MARGEN_CIERRE_MS : 300)
+    const t = setTimeout(() => unaVez(...accion), fase === FASES.VOTO || !estado.reto ? MARGEN_CIERRE_MS : 300)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restante === 0, fase, estado?.turno])
@@ -160,7 +164,7 @@ function Tablero() {
     const conFichas = new Set(fichas.filter((f) => f.dueno).map((f) => f.dueno))
     for (const p of personas)
       if (!conFichas.has(p.id) && !p.ausente)
-        unaVez(`tarde:${estado.generacion}_${p.id}`, () => asignarFichas(db, estado, p, fichas))
+        unaVez(`tarde:${estado.generacion}_${p.id}`, async () => asignarFichas(db, estado, p, fichas, await conNiveles()))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [personas.length, estado?.iniciada, fichas.length])
 
@@ -282,6 +286,7 @@ function Tablero() {
         conectados={conectados}
         fichas={fichas}
         onSiguiente={siguiente}
+        conNiveles={conNiveles}
         onSaltar={() => {
           if (estado.oradorId) saltados.current = [estado.oradorId]
         }}
