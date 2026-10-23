@@ -30,9 +30,8 @@ service cloud.firestore {
     }
 
     // La inscripción usa el uid como id de persona. Con el código de sala y la generación vigentes.
-    match /personas/{personaId} {
-      allow read: if autenticado();
-      allow create: if autenticado()
+    function inscripcionValida(personaId) {
+      return autenticado()
         && personaId == request.auth.uid
         && request.resource.data.keys().hasOnly(['nombre', 'uids', 'codigoSala', 'generacion', 'creado', 'paso', 'ausente'])
         && request.resource.data.uids == [request.auth.uid]
@@ -43,13 +42,21 @@ service cloud.firestore {
         && request.resource.data.ausente == false
         && request.resource.data.codigoSala == estado().codigoSala
         && request.resource.data.generacion == estado().generacion;
-      allow update, delete: if anfitrion();
+    }
+    match /personas/{personaId} {
+      allow read: if autenticado();
+      allow create: if inscripcionValida(personaId);
+      // El mismo celular puede volver a inscribirse en una partida nueva (su registro viejo es de
+      // otra generación). Dentro de la misma partida, solo el anfitrión lo cambia.
+      allow update: if anfitrion()
+        || (inscripcionValida(personaId) && resource.data.generacion != estado().generacion);
+      allow delete: if anfitrion();
     }
 
     // Código de recuperación: lo escribe el celular al inscribirse y solo lo lee el anfitrión.
     match /codigos/{personaId} {
       allow read: if anfitrion();
-      allow create: if autenticado() && personaId == request.auth.uid
+      allow create, update: if autenticado() && personaId == request.auth.uid
         && request.resource.data.keys().hasOnly(['codigo'])
         && request.resource.data.codigo is string
         && request.resource.data.codigo.size() == 4;
@@ -61,9 +68,9 @@ service cloud.firestore {
       allow create: if autenticado() && uid == request.auth.uid
         && request.resource.data.keys().hasOnly(['nombre', 'codigo', 'creado'])
         && request.resource.data.codigo is string;
-      // Si lo rechazaron, puede intentarlo otra vez (el anfitrión lo vuelve a revisar).
+      // Si ya lo resolvieron (rechazado, o aceptado en otra partida), puede pedirlo otra vez.
       allow update: if anfitrion() || (autenticado() && uid == request.auth.uid
-        && resource.data.estado == 'rechazado'
+        && 'estado' in resource.data
         && request.resource.data.keys().hasOnly(['nombre', 'codigo', 'creado'])
         && request.resource.data.codigo is string);
       allow delete: if anfitrion();

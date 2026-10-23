@@ -183,3 +183,15 @@ test('bitácora: cualquiera con sesión escribe filas cortas a su nombre; solo e
   await assertFails(getDoc(doc(celular('ana'), 'bitacora/a1')))
   await assertSucceeds(getDoc(doc(pantalla(), 'bitacora/a1')))
 })
+
+test('el mismo celular se vuelve a inscribir en una partida nueva; en la misma, no se pisa', async () => {
+  const p = (gen) => ({ nombre: 'Luis', uids: ['luis'], codigoSala: 'ABCD', generacion: gen, paso: false, ausente: false, creado: serverTimestamp() })
+  await assertSucceeds(setDoc(doc(celular('luis'), 'personas/luis'), p(0)))
+  await assertSucceeds(setDoc(doc(celular('luis'), 'codigos/luis'), { codigo: '1234' }))
+  await assertFails(setDoc(doc(celular('luis'), 'personas/luis'), { ...p(0), nombre: 'Otro' }))
+  await preparar({ generacion: 1 })
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'personas/luis'), { ...p(0), creado: null }))
+  await assertSucceeds(setDoc(doc(celular('luis'), 'personas/luis'), p(1)))
+  await assertSucceeds(setDoc(doc(celular('luis'), 'codigos/luis'), { codigo: '5678' }))
+  await assertFails(setDoc(doc(celular('ana'), 'personas/luis'), p(1)))
+})
