@@ -19,6 +19,7 @@ import {
   aplicarTurno,
   calcularTurno,
   candidatosRuleta,
+  premios,
   ranking,
   repartir,
   sortear,
@@ -472,10 +473,16 @@ export async function saltarTurno(db, estado) {
 
 export async function terminarPartida(db, estado, personas) {
   const nombre = Object.fromEntries(personas.map((p) => [p.id, p.nombre]))
+  const snap = await getDocs(query(collection(db, 'turnos'), where('generacion', '==', estado.generacion)))
   await updateDoc(doc(db, ESTADO), {
     fase: FASES.FINAL,
     cronoInicio: null,
     top: topConNombres(estado.marcador || {}, nombre, 30),
+    premios: premios(
+      snap.docs.map((d) => d.data()),
+      estado.marcador || {},
+      nombre,
+    ),
     eventos: evento(estado, '🏁 Fin de la partida'),
   })
 }

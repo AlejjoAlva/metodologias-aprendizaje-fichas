@@ -1,8 +1,23 @@
+const INSIGNIAS = [
+  ['persuasor', '🗣️ El Persuasor'],
+  ['abogado', '😈 Abogado del Diablo'],
+  ['aplaudido', '🔥 El Más Aplaudido'],
+  ['ojoClinico', '🔬 Ojo Clínico'],
+]
+const RANKINGS = [
+  ['conocida', 'La más conocida'],
+  ['desconocida', 'La más desconocida'],
+  ['joya', 'La joya oculta'],
+  ['polemica', 'La más polémica'],
+  ['engano', 'La que más engañó'],
+]
+
 export default function Podio({ estado, fichas }) {
   const top = estado.top || []
   const [a, b, c] = [top[0], top[1], top[2]]
   const porExplorar = fichas.filter((f) => f.estado !== 'jugada')
   const m = estado.marcador || {}
+  const p = estado.premios
   return (
     <div className="podio">
       <h2>🏁 Podio final</h2>
@@ -24,16 +39,46 @@ export default function Podio({ estado, fichas }) {
         )}
       </div>
       <div className="podio-resto">
-        <ol start={4}>
-          {top.slice(3, 15).map((t) => (
-            <li key={t.id}>
-              {t.posicion}. {t.nombre} · {t.total}
-            </li>
-          ))}
-        </ol>
-        <div className="por-explorar">
-          <h3>Quedaron por explorar ({porExplorar.length})</h3>
-          <p>{porExplorar.map((f) => f.nombre).join(' · ')}</p>
+        <div>
+          <h3>Insignias</h3>
+          <ul className="premios">
+            {INSIGNIAS.map(([k, titulo]) => (
+              <li key={k}>
+                <span className="premio-titulo">{titulo}</span>
+                <span>
+                  <span className="premio-quien">{p?.insignias?.[k]?.nombre ?? '—'}</span>
+                  {p?.insignias?.[k]?.detalle && <span className="premio-detalle"> · {p.insignias[k].detalle}</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h3>Fichas</h3>
+          <ul className="premios">
+            {RANKINGS.map(([k, titulo]) => (
+              <li key={k}>
+                <span className="premio-titulo">{titulo}</span>
+                <span>
+                  <span className="premio-quien">{p?.fichas?.[k]?.ficha ?? '—'}</span>
+                  {p?.fichas?.[k]?.detalle && <span className="premio-detalle"> · {p.fichas[k].detalle}</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <ol start={4}>
+            {top.slice(3, 12).map((t) => (
+              <li key={t.id}>
+                {t.posicion}. {t.nombre} · {t.total}
+              </li>
+            ))}
+          </ol>
+          <div className="por-explorar">
+            <h3>Quedaron por explorar ({porExplorar.length})</h3>
+            <p>{porExplorar.map((f) => f.nombre).join(' · ')}</p>
+          </div>
         </div>
       </div>
     </div>

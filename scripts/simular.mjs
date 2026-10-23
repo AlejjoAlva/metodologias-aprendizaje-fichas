@@ -27,6 +27,7 @@ import {
   excluirFicha,
   leerNiveles,
   reemplazarFichas,
+  terminarPartida,
 } from '../src/lib/acciones-pantalla.js'
 import {
   elegirReto,
@@ -322,6 +323,12 @@ async function main() {
     const total = Object.values(marcador).reduce((s, m) => s + m.total, 0)
     console.log(`  marcador acumulado: ${total} pts repartidos`)
   }
+
+  ctx = await contexto(host)
+  await terminarPartida(host.db, ctx.estado, ctx.personas)
+  const fin = await leerEstado(host.db)
+  ok(fin.fase === 'final' && fin.premios?.fichas?.engano?.ficha && fin.premios?.insignias?.ojoClinico,
+    `final: podio con insignias y «La que más engañó» (${fin.premios?.fichas?.engano?.ficha})`)
 
   // Limpieza de conexiones.
   for (const c of [...celulares, tarde, otro, malo, host]) {

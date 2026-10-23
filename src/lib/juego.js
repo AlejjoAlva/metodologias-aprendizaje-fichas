@@ -276,3 +276,68 @@ export function ranking(marcador) {
   })
   return filas
 }
+
+const mejor = (lista, valor) =>
+  lista.reduce((m, x) => (valor(x) != null && (m == null || valor(x) > valor(m)) ? x : m), null)
+
+/**
+ * Insignias y rankings de fichas del podio final, a partir de los turnos jugados.
+ * turnos: [{ oradorId, oradorNombre, ficha, resultado }]; marcador: el del estado.
+ */
+export function premios(turnos, marcador, nombre) {
+  const jugados = turnos.filter((t) => t.resultado && !t.resultado.saltado)
+  const r = (t) => t.resultado
+  const insignia = (t, detalle) => (t ? { nombre: t.oradorNombre, ficha: t.ficha, detalle } : null)
+
+  const persuasor = mejor(
+    jugados.filter((t) => r(t).base > 0),
+    (t) => r(t).pctPersuadido * 1000 + r(t).persuadidos,
+  )
+  const abogado = mejor(
+    jugados.filter((t) => r(t).contracorriente),
+    (t) => r(t).notaPromedio,
+  )
+  const aplaudido = mejor(
+    jugados.filter((t) => r(t).fuegos > 0),
+    (t) => r(t).fuegos,
+  )
+  const maxAciertos = Math.max(0, ...Object.values(marcador || {}).map((m) => m.aciertos || 0))
+  const ojo = maxAciertos
+    ? Object.entries(marcador)
+        .filter(([, m]) => m.aciertos === maxAciertos)
+        .map(([id]) => nombre[id])
+        .filter(Boolean)
+    : []
+
+  const conVotos = jugados.filter((t) => r(t).votantes > 0)
+  const conImpresion = jugados.filter((t) => r(t).pctConoce != null)
+  const ficha = (t, detalle) => (t ? { ficha: t.ficha, detalle } : null)
+  const conocida = mejor(conImpresion, (t) => r(t).pctConoce)
+  const desconocida = mejor(conImpresion, (t) => -r(t).pctConoce)
+  const joya = mejor(
+    conVotos.filter((t) => r(t).pctConoce != null && r(t).pctConoce <= 50),
+    (t) => r(t).pctSi,
+  )
+  const polemica = mejor(conVotos, (t) => -Math.abs(r(t).pctSi - 50))
+  const engano = mejor(
+    jugados.filter((t) => r(t).predijeron > 0),
+    (t) => (r(t).predijeron - r(t).aciertos) / r(t).predijeron,
+  )
+  const pctErrado = (t) => Math.round(((r(t).predijeron - r(t).aciertos) / r(t).predijeron) * 100)
+
+  return {
+    insignias: {
+      persuasor: insignia(persuasor, persuasor && `${r(persuasor).pctPersuadido}% persuadido`),
+      abogado: insignia(abogado, abogado && `contracorriente con nota ${r(abogado).notaPromedio}`),
+      aplaudido: insignia(aplaudido, aplaudido && `${r(aplaudido).fuegos} 🔥`),
+      ojoClinico: ojo.length ? { nombre: ojo.join(', '), detalle: `${maxAciertos} predicciones acertadas` } : null,
+    },
+    fichas: {
+      conocida: ficha(conocida, conocida && `${r(conocida).pctConoce}% la conocía`),
+      desconocida: ficha(desconocida, desconocida && `${r(desconocida).pctConoce}% la conocía`),
+      joya: ficha(joya, joya && `poco conocida, a ${r(joya).pctSi}% le sirve`),
+      polemica: ficha(polemica, polemica && `${r(polemica).pctSi}% le sirve`),
+      engano: ficha(engano, engano && `${pctErrado(engano)}% predijo mal su evidencia`),
+    },
+  }
+}

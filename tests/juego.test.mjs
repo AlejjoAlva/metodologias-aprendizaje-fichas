@@ -14,6 +14,7 @@ import {
   ranking,
   candidatosRuleta,
   nombreUnico,
+  premios,
 } from '../src/lib/juego.js'
 import { PUNTOS } from '../src/lib/config.js'
 
@@ -283,4 +284,29 @@ test('aplicarTurno: quien no participa pierde la racha', () => {
 test('ranking con empates compartidos', () => {
   const r = ranking({ a: { total: 10 }, b: { total: 7 }, c: { total: 10 }, d: { total: 3 } })
   assert.deepEqual(r.map((x) => [x.personaId, x.posicion]), [['a', 1], ['c', 1], ['b', 3], ['d', 4]])
+})
+
+test('premios: insignias y rankings de fichas', () => {
+  const t = (oradorNombre, ficha, resultado) => ({ oradorNombre, ficha, resultado })
+  const turnos = [
+    t('Ana', 'F1', { base: 4, pctPersuadido: 75, persuadidos: 3, contracorriente: false, notaPromedio: 4.5, fuegos: 9, votantes: 10, pctSi: 80, pctConoce: 90, predijeron: 10, aciertos: 9 }),
+    t('Luis', 'F2', { base: 5, pctPersuadido: 40, persuadidos: 2, contracorriente: true, notaPromedio: 4.2, fuegos: 3, votantes: 10, pctSi: 50, pctConoce: 20, predijeron: 10, aciertos: 1 }),
+    t('Sara', 'F3', { base: 2, pctPersuadido: 50, persuadidos: 1, contracorriente: true, notaPromedio: 4.8, fuegos: 0, votantes: 10, pctSi: 70, pctConoce: 40, predijeron: 10, aciertos: 5 }),
+    t('Saltado', 'F4', { saltado: true }),
+  ]
+  const marcador = { a: { aciertos: 2 }, b: { aciertos: 3 }, c: { aciertos: 3 } }
+  const p = premios(turnos, marcador, { a: 'Ana', b: 'Luis', c: 'Sara' })
+  assert.equal(p.insignias.persuasor.nombre, 'Ana')
+  assert.equal(p.insignias.abogado.nombre, 'Sara')
+  assert.equal(p.insignias.aplaudido.nombre, 'Ana')
+  assert.equal(p.insignias.ojoClinico.nombre, 'Luis, Sara')
+  assert.equal(p.fichas.conocida.ficha, 'F1')
+  assert.equal(p.fichas.desconocida.ficha, 'F2')
+  assert.equal(p.fichas.joya.ficha, 'F3')
+  assert.equal(p.fichas.polemica.ficha, 'F2')
+  assert.equal(p.fichas.engano.ficha, 'F2')
+  assert.match(p.fichas.engano.detalle, /90%/)
+  const vacio = premios([], {}, {})
+  assert.equal(vacio.insignias.abogado, null)
+  assert.equal(vacio.fichas.engano, null)
 })

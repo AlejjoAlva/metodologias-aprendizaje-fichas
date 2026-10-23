@@ -1239,22 +1239,22 @@ button {
 }
 
 .e1 .escalon-base {
-  height: 20vh;
+  height: 12vh;
   background: var(--oro);
 }
 
 .e2 .escalon-base {
-  height: 14vh;
+  height: 9vh;
 }
 
 .e3 .escalon-base {
-  height: 10vh;
+  height: 7vh;
   background: var(--acento-2);
 }
 
 .podio-resto {
   display: grid;
-  grid-template-columns: 1fr 2fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 2vw;
   min-height: 0;
   overflow: hidden;
@@ -1263,9 +1263,48 @@ button {
 
 .podio-resto ol {
   list-style: none;
-  margin: 0;
+  margin: 0 0 1.4vh;
   padding: 0;
   columns: 2;
+}
+
+.podio-resto h3 {
+  font-size: 2.2vh;
+  margin: 0 0 0.8vh;
+}
+
+.premios {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9vh;
+}
+
+.premios li {
+  display: flex;
+  flex-direction: column;
+}
+
+.premio-titulo {
+  font-weight: 700;
+}
+
+.premio-quien {
+  font-weight: 600;
+  color: var(--acento);
+  line-height: 1.2;
+}
+
+.premio-detalle {
+  font-size: 1.6vh;
+  color: var(--tinta-2);
+}
+
+.por-explorar p {
+  max-height: 22vh;
+  overflow: hidden;
 }
 
 .por-explorar p {
@@ -1768,4 +1807,59 @@ button {
   padding: 0.3vh 0.5vw;
   grid-template-columns: minmax(0, 1fr) auto auto 2.2vh auto;
   gap: 0.3vw;
+}
+
+.escalon-base {
+  font-size: 5vh;
+}
+
+.podio-resto ol li {
+  white-space: nowrap;
+  font-size: 1.8vh;
+}
+
+.premios {
+  gap: 0.7vh;
+}
+
+/* Podio compacto: deja sitio a insignias y fichas */
+.podio {
+  gap: 1.4vh;
+}
+
+.podio h2 {
+  font-size: 3.2vh;
+}
+
+.escalon-nombre {
+  font-size: 3vh;
+}
+
+.escalon-pts {
+  font-size: 2.4vh;
+}
+
+.e1 .escalon-base {
+  height: 9vh;
+}
+
+.e2 .escalon-base {
+  height: 7vh;
+}
+
+.e3 .escalon-base {
+  height: 5.5vh;
+}
+
+.escalon-base {
+  font-size: 4vh;
+}
+
+.podio-resto {
+  font-size: 1.8vh;
+  line-height: 1.25;
+}
+
+.premio-detalle {
+  font-size: 1.5vh;
 }
