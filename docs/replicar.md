@@ -7,7 +7,7 @@ Tiempo estimado: 30–40 minutos la primera vez.
 
 ## 0. Requisitos
 
-- **Node.js 20 o superior** (recomendado 22). Con `nvm`: `nvm install 22`.
+- **Node.js 20.19 o superior** (recomendado 22). Con `nvm`: `nvm install 22`.
 - **Firebase CLI**: `npm install -g firebase-tools` y luego `firebase login`.
 - **Java 11 o superior**, solo si vas a usar los emuladores y las pruebas de reglas
   (`sudo apt install default-jre` en Ubuntu).
