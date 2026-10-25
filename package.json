@@ -10,8 +10,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "node --test tests/juego.test.mjs tests/csv.test.mjs",
-    "test:reglas": "firebase emulators:exec --only firestore,database \"node --test tests/reglas.test.mjs\"",
-    "emu": "firebase emulators:start --only auth,firestore,database"
+    "test:reglas": "firebase emulators:exec --project demo-fichas --only firestore,database \"node --test tests/reglas.test.mjs\"",
+    "emu": "firebase emulators:start --project demo-fichas --only auth,firestore,database"
   },
   "dependencies": {
     "firebase": "^12.18.0",

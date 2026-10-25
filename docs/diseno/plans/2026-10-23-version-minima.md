@@ -26,7 +26,7 @@ Presencia con Realtime Database (`onDisconnect`).
 - Nada se borra desde el cliente. "Empezar de cero" sube la generación.
 - Textos de la interfaz en español. Mobile-first en `/`; `/pantalla` para pantalla grande 16:9 sin
   scroll de página, medidas de altura en `vh`.
-- Identidad de commit local del semillero. Repo privado `uamffcebog123/metodologias-aprendizaje-fichas`.
+- Repo en la cuenta institucional del semillero.
 
 ## Estructura de archivos
 

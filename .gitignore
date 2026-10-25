@@ -31,3 +31,7 @@ firebase-debug.log
 firestore-debug.log
 ui-debug.log
 .medicion/
+
+# Cada quien usa su propio proyecto (ver .firebaserc.example)
+.firebaserc
+.playwright-cli/

@@ -59,7 +59,7 @@ const config = PROD
       databaseURL: process.env.VITE_FB_DATABASE_URL,
       appId: process.env.VITE_FB_APP_ID,
     }
-  : { apiKey: 'demo', projectId: 'TU-PROYECTO-FIREBASE', databaseURL: 'http://127.0.0.1:9000/?ns=TU-PROYECTO-FIREBASE-default-rtdb' }
+  : { apiKey: 'demo', projectId: 'demo-fichas', databaseURL: 'http://127.0.0.1:9000/?ns=demo-fichas-default-rtdb' }
 
 let fallos = 0
 const ok = (cond, msg) => {
@@ -82,7 +82,7 @@ function cliente(nombre) {
 }
 
 async function crearAnfitrionEmulador() {
-  const r = await fetch('http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/projects/TU-PROYECTO-FIREBASE/accounts', {
+  const r = await fetch('http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/projects/demo-fichas/accounts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' },
     body: JSON.stringify({ localId: UID_ANFITRION, email: CORREO, password: CLAVE }),

@@ -1,13 +1,17 @@
 // Crea (o renueva la contraseña de) la cuenta del anfitrión en PRODUCCIÓN, con el UID fijo que
 // exigen las reglas. Usa la sesión de la CLI de Firebase de este computador.
 //   firebase projects:list > /dev/null   (refresca la sesión)
-//   node scripts/crear-anfitrion.mjs
+//   node --env-file=.env scripts/crear-anfitrion.mjs
 // Imprime la contraseña nueva una sola vez: anótala.
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { randomInt } from 'node:crypto'
 
-const PROYECTO = 'TU-PROYECTO-FIREBASE'
+const PROYECTO = process.env.VITE_FB_PROJECT_ID
+if (!PROYECTO) {
+  console.error('Falta VITE_FB_PROJECT_ID. Corre: node --env-file=.env scripts/crear-anfitrion.mjs')
+  process.exit(1)
+}
 const UID = 'anfitrion-fichas-2026'
 const CORREO = 'anfitrion@metodologias-fichas.uace'
 

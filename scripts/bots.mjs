@@ -12,7 +12,7 @@ import { FASES } from '../src/lib/juego.js'
 
 const args = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, '').split('=')))
 const N = Number(args.n || 12)
-const PROYECTO = 'TU-PROYECTO-FIREBASE'
+const PROYECTO = 'demo-fichas'
 const NOMBRES = ['Ana', 'Luis', 'Camila', 'Mateo', 'Valentina', 'Santiago', 'Sofía', 'Daniel', 'Laura', 'Andrés',
   'Mariana', 'Felipe', 'Paula', 'Juan', 'Isabella', 'Nicolás', 'Gabriela', 'Sebastián', 'Natalia', 'Tomás',
   'Manuela', 'David', 'Carolina', 'Esteban', 'Lucía', 'Julián', 'Sara', 'Diego', 'Daniela', 'Samuel']

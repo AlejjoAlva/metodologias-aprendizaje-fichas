@@ -2,7 +2,7 @@
 
 El modelo conceptual completo del juego está en el documento "Debate de metodologías de estudio:
 modelo conceptual" (2026-10-23). Esta especificación define **qué se construye hoy** y **cómo**, con
-las lecciones de La Bolsa (`~/Proyectos/bolsa-semillero`) aplicadas desde el inicio.
+las lecciones de La Bolsa (`bolsa-semillero`) aplicadas desde el inicio.
 
 ## 1. Alcance
 
@@ -33,7 +33,7 @@ pausa del cronómetro.
 ## 2. Arquitectura
 
 Vite + React + Firestore + Firebase Auth + Hosting, plan **Spark**, proyecto nuevo bajo
-`la cuenta institucional del semillero`, repo privado `uamffcebog123/metodologias-aprendizaje-fichas`.
+la cuenta institucional del semillero.
 Sin Cloud Functions (no hay Blaze).
 
 **Presencia con Realtime Database (RTDB)**: Firestore no detecta desconexiones sin escrituras
